@@ -76,7 +76,9 @@ registerPlugin(
 
             if (__DEV__)
                 Object.defineProperty(globalThis, '__SENTRY__', {
-                    set: () => warnSetSentry(getCurrentStack()),
+                    set: () => {
+                        warnSetSentry(getCurrentStack())
+                    },
                 })
             else
                 Object.defineProperty(globalThis, '__SENTRY__', {
@@ -85,7 +87,7 @@ registerPlugin(
 
             cleanup(unsubSU, unsubSIU, unsubSentryInst)
         },
-        init({ cleanup, logger }) {
+        start({ cleanup, logger }) {
             // utils/AnalyticsUtils.tsx
             const unsubAU = waitForModules(
                 byProps<{
@@ -153,7 +155,7 @@ registerPlugin(
 
 function warnSetSentry(stack: string) {
     nativeLoggingHook(
-        `\u001b[33mNo Track: Attempt to set __SENTRY__\n${stack}`,
+        `\u001b[33mNo Track: Attempt to set __SENTRY__\n${stack}\u001b[0m`,
         2,
     )
 }
