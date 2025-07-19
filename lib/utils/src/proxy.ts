@@ -39,7 +39,12 @@ export function getProxyTarget(obj: object) {
 
 const _metas = new WeakMap<
     object,
-    [factory: () => unknown, bind: boolean, cacheable: boolean, cache?: unknown]
+    {
+        factory: () => unknown
+        bind: boolean
+        cacheable: boolean
+        cache?: unknown
+    }
 >()
 
 const _handler = {
@@ -56,7 +61,7 @@ const _handler = {
         const target = unproxifyFromHint(hint)
         const val = Reflect.get(target!, p, recv)
 
-        if (_metas.get(hint)![1] && typeof val === 'function')
+        if (_metas.get(hint)?.bind && val instanceof Function)
             return new Proxy(val, {
                 // If thisArg happens to be a proxified value, we will use the target object instead
                 apply: (fn, thisArg, args) =>
@@ -126,16 +131,17 @@ export function proxify<T>(signal: () => T, options?: ProxifyOptions): T {
     // biome-ignore lint/complexity/useArrowFunction: We need a function with a constructor
     const hint = options?.hint ?? function () {}
 
-    _metas.set(hint, [
-        signal,
-        options?.bindMethods ?? false,
-        options?.cache ?? false,
-    ])
+    _metas.set(hint, {
+        factory: signal,
+        bind: options?.bindMethods ?? false,
+        cacheable: options?.cache ?? false,
+    })
 
-    if (__BUILD_FLAG_DEBUG_PROXIFIED_VALUES__) {
-        const v = unproxifyFromHint(hint)
-        if (v == null) DEBUG_warnNullishProxifiedValue()
-    }
+    if (__BUILD_FLAG_DEBUG_PROXIFIED_VALUES__)
+        (globalThis.setImmediate ?? ((x: () => void) => x()))(() => {
+            if (unproxifyFromHint(hint) == null)
+                DEBUG_warnNullishProxifiedValue()
+        })
 
     return new Proxy(hint, _handler) as T
 }
@@ -177,8 +183,20 @@ export function unproxify<T extends object>(proxified: T): T {
 
 function unproxifyFromHint(hint: object) {
     const meta = _metas.get(hint)!
-    if (meta[1]) return meta[2] ?? ((meta[3] = meta[0]()) as any)
-    return meta[0]() as any
+    if (meta.cacheable)
+        return meta.cache ?? ((meta.cache = meta.factory()) as any)
+    return meta.factory() as any
+}
+
+export type DestructureOptions<T extends object> = {
+    [K in keyof T]?: ProxifyOptions
+}
+
+export type DestructureResult<
+    T extends object,
+    O extends DestructureOptions<T>,
+> = {
+    [K in keyof T]: O[K] extends ProxifyOptions ? T[K] : never
 }
 
 /**
@@ -208,25 +226,29 @@ function unproxifyFromHint(hint: object) {
  * z // TypeError: Cannot destructure and proxify null (reading 'z')
  * ```
  */
-export function destructure<T extends object>(
-    proxified: T,
-    options?: ProxifyOptions,
-): T {
+export function destructure<
+    T extends object,
+    const O extends DestructureOptions<T>,
+>(proxified: T, options?: O): DestructureResult<T, O> {
     return new Proxy({} as T, {
         get: (_, p, r) =>
-            proxify(() => {
-                const v = Reflect.get(unproxify(proxified), p, r)
+            proxify(
+                () => {
+                    const v = Reflect.get(unproxify(proxified), p, r)
 
-                if (v == null)
+                    if (v == null)
+                        throw new TypeError(
+                            `Cannot destructure and proxify ${v} (reading '${String(p)}')`,
+                        )
+                    if (typeof v === 'function' || typeof v === 'object')
+                        return v
                     throw new TypeError(
-                        `Cannot destructure and proxify ${v} (reading '${String(p)}')`,
+                        `Cannot destructure and proxify a primitive (reading '${String(p)}')`,
                     )
-                if (typeof v === 'function' || typeof v === 'object') return v
-                throw new TypeError(
-                    `Cannot destructure and proxify a primitive (reading '${String(p)}')`,
-                )
-            }, options),
-    })
+                },
+                options?.[p as keyof T],
+            ),
+    }) as DestructureResult<T, O>
 }
 
 /**

@@ -1,4 +1,6 @@
 import { EventEmitter } from 'node:events'
+import type { StackScreenProps } from '@react-navigation/stack'
+import type { ReactNavigationParamList } from '@revenge-mod/externals/react-navigation'
 import type { ComponentProps, ComponentType, FC, JSX, ReactNode } from 'react'
 import type {
     ImageSourcePropType,
@@ -6,6 +8,7 @@ import type {
     PressableProps,
     TextInputProps as RNTextInputProps,
     TextProps as RNTextProps,
+    StyleProp,
     TextStyle,
     View,
     ViewProps,
@@ -343,7 +346,7 @@ export namespace DiscordModules {
             isClearable?: boolean
 
             size?: TextFieldSize
-            style?: ViewStyle | ViewStyle[]
+            style?: StyleProp<ViewStyle>
         }
 
         export type TextFieldSize = 'sm' | 'md' | 'lg'
@@ -519,7 +522,7 @@ export namespace DiscordModules {
         export interface TextProps extends RNTextProps {
             variant?: Styles.TextVariant
             color?: string
-            style?: TextStyle
+            style?: StyleProp<TextStyle>
             lineClamp?: number
             ellipsizeMode?: 'head' | 'middle' | 'tail' | 'clip'
             tabularNumbers?: boolean
@@ -613,7 +616,12 @@ export namespace DiscordModules {
 
             export interface RouteSettingsItem extends BaseSettingsItem {
                 type: 'route'
-                screen: { route: string; getComponent(): ComponentType }
+                screen: {
+                    route: string
+                    getComponent(): ComponentType<
+                        StackScreenProps<ReactNavigationParamList>
+                    >
+                }
             }
 
             export interface StaticSettingsItem extends BaseSettingsItem {

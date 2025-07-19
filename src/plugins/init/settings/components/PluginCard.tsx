@@ -3,20 +3,16 @@ import { styles } from '@revenge-mod/components/_'
 import FormSwitch from '@revenge-mod/components/FormSwitch'
 import { Tokens } from '@revenge-mod/discord/common'
 import { Design } from '@revenge-mod/discord/design'
+import { RootNavigationRef } from '@revenge-mod/discord/modules/main_tabs_v2'
 import {
     enablePlugin,
     InternalPluginFlags,
     initPlugin,
-    pEmitter,
     preInitPlugin,
     startPlugin,
 } from '@revenge-mod/plugins/_'
-import { PluginFlags } from '@revenge-mod/plugins/constants'
-import { useReRender } from '@revenge-mod/utils/react'
-import { useEffect } from 'react'
 import { Image, Pressable } from 'react-native'
 import { useClickOutside } from 'react-native-click-outside'
-import { navigatePluginSettings } from '../utils'
 import {
     enableTooltipTarget,
     essentialTooltipTarget,
@@ -35,47 +31,30 @@ const SettingsIcon = getAssetIdByName('SettingsIcon', 'png')!
 export function InstalledPluginCard({
     plugin,
     iflags,
+    enabled,
     rightGap,
 }: {
     plugin: InternalPlugin
     iflags: number
+    enabled: boolean
     rightGap?: boolean
 }) {
     const {
-        manifest: { id, name, description, author, icon },
-        flags,
+        manifest: { name, description, author, icon },
     } = plugin
 
-    // Re-render on plugin enable/disable
-    const reRender = useReRender()
-    useEffect(() => {
-        const listener = (p: InternalPlugin) =>
-            id === p.manifest.id && reRender()
-
-        pEmitter.on('disabled', listener)
-        pEmitter.on('enabled', listener)
-
-        return () => {
-            pEmitter.off('disabled', listener)
-            pEmitter.off('enabled', listener)
-        }
-    })
-
     const essential = Boolean(iflags & InternalPluginFlags.Essential)
-    const enabled = Boolean(flags & PluginFlags.Enabled)
     const styles_ = usePluginCardStyles()
 
-    const settingsRef = useClickOutside<View>(
-        () =>
-            enableTooltipTarget.current === settingsRef.current &&
-            setEnablePluginTooltipVisible?.(false),
-    )
+    const settingsRef = useClickOutside<View>(() => {
+        if (enableTooltipTarget.current === settingsRef.current)
+            setEnablePluginTooltipVisible?.(false)
+    })
 
-    const switchRef = useClickOutside<View>(
-        () =>
-            essentialTooltipTarget.current === switchRef.current &&
-            setEssentialPluginTooltipVisible?.(false),
-    )
+    const switchRef = useClickOutside<View>(() => {
+        if (essentialTooltipTarget.current === switchRef.current)
+            setEssentialPluginTooltipVisible?.(false)
+    })
 
     return (
         <Card style={[styles_.card, styles.grow, rightGap && styles_.rightGap]}>
@@ -102,8 +81,11 @@ export function InstalledPluginCard({
                             e.stopPropagation()
                             resetTooltips()
 
-                            enableTooltipTarget.current = settingsRef.current
-                            setEnablePluginTooltipVisible?.(true)
+                            requestAnimationFrame(() => {
+                                enableTooltipTarget.current =
+                                    settingsRef.current
+                                setEnablePluginTooltipVisible?.(true)
+                            })
                         }}
                     >
                         <IconButton
@@ -112,7 +94,9 @@ export function InstalledPluginCard({
                             variant="secondary"
                             icon={SettingsIcon}
                             onPress={() => {
-                                navigatePluginSettings(plugin)
+                                RootNavigationRef.getRootNavigationRef().navigate(
+                                    plugin.manifest.id,
+                                )
                             }}
                             disabled={!enabled}
                         />
@@ -124,8 +108,11 @@ export function InstalledPluginCard({
                             e.stopPropagation()
                             resetTooltips()
 
-                            essentialTooltipTarget.current = switchRef.current
-                            setEssentialPluginTooltipVisible?.(true)
+                            requestAnimationFrame(() => {
+                                essentialTooltipTarget.current =
+                                    switchRef.current
+                                setEssentialPluginTooltipVisible?.(true)
+                            })
                         }
                     }}
                     ref={switchRef}

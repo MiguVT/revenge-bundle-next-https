@@ -49,22 +49,22 @@ export default function RevengePluginsSettingScreen() {
 const SearchDebounceTime = 100
 
 const Filters: FilterAndSortActionSheetProps['filters'] = {
-    Enabled: [
-        getAssetIdByName('CircleCheckIcon')!,
-        plugin => Boolean(plugin.flags & PluginFlags.Enabled),
-    ],
-    Disabled: [
-        getAssetIdByName('CircleXIcon')!,
-        plugin => !(plugin.flags & PluginFlags.Enabled),
-    ],
-    Internal: [
-        RevengeIcon,
-        plugin => Boolean(plugin.flags & InternalPluginFlags.Internal),
-    ],
-    Essential: [
-        getAssetIdByName('StarIcon')!,
-        (_, iflags) => Boolean(iflags & InternalPluginFlags.Essential),
-    ],
+    Enabled: {
+        icon: getAssetIdByName('CircleCheckIcon')!,
+        filter: plugin => Boolean(plugin.flags & PluginFlags.Enabled),
+    },
+    Disabled: {
+        icon: getAssetIdByName('CircleXIcon')!,
+        filter: plugin => !(plugin.flags & PluginFlags.Enabled),
+    },
+    Internal: {
+        icon: RevengeIcon,
+        filter: plugin => Boolean(plugin.flags & InternalPluginFlags.Internal),
+    },
+    Essential: {
+        icon: getAssetIdByName('StarIcon')!,
+        filter: (_, iflags) => Boolean(iflags & InternalPluginFlags.Essential),
+    },
 } satisfies FilterAndSortActionSheetProps['filters']
 const DefaultFilters: FilterAndSortActionSheetProps['filter'] = []
 
@@ -109,7 +109,10 @@ function Screen() {
         () =>
             [...pList.values()].map(
                 plugin =>
-                    [plugin, pMetadata.get(plugin.manifest.id)![2]] as const,
+                    [
+                        plugin,
+                        pMetadata.get(plugin.manifest.id)!.iflags,
+                    ] as const,
             ),
         [],
     )
@@ -118,9 +121,9 @@ function Screen() {
         .filter(([plugin, iflags]) => {
             if (filter.length === 0) return true
             if (matchAll)
-                return filter.every(f => Filters[f][1](plugin, iflags))
+                return filter.every(f => Filters[f].filter(plugin, iflags))
 
-            return filter.some(f => Filters[f][1](plugin, iflags))
+            return filter.some(f => Filters[f].filter(plugin, iflags))
         })
         .filter(([plugin]) => {
             const { name, description, author } = plugin.manifest
@@ -208,8 +211,9 @@ function PluginMasonryFlashList({
             ListEmptyComponent={NoPlugins}
             renderItem={({ item: [plugin, iflags], columnIndex }) => (
                 <InstalledPluginCard
-                    iflags={iflags}
                     key={plugin.manifest.id}
+                    enabled={Boolean(plugin.flags & PluginFlags.Enabled)}
+                    iflags={iflags}
                     plugin={plugin}
                     rightGap={columnIndex + 1 < numColumns}
                 />

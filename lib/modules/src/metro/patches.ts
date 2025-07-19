@@ -17,15 +17,14 @@ import {
 } from './subscriptions/_internal'
 import type { Metro, RevengeMetro } from '../types'
 
-/** Initializing ID */
 export let mInitializingId: Metro.ModuleID | null = null
-/** Known uninitialized IDs */
+/** Uninitialized IDs (not blacklisted) */
 export const mUninitialized = new Set<Metro.ModuleID>()
-/** Known initialized IDs (not blacklisted) */
+/** Initialized IDs (not blacklisted) */
 export const mInitialized = new Set<Metro.ModuleID>()
 
 export const mImportedPaths = new Map<string, Metro.ModuleID>()
-export const mDeps: Metro.DependencyMap[] = []
+export const mDeps = new Map<Metro.ModuleID, Metro.DependencyMap>()
 
 export const mList: RevengeMetro.ModuleList = new Map()
 
@@ -34,21 +33,21 @@ const metroDefine = (
     id: Metro.ModuleID,
     dependencyMap: Metro.DependencyMap,
 ) => {
-    mDeps[id] = dependencyMap!
+    mDeps.set(id, dependencyMap!)
     mUninitialized.add(id)
 
     const moduleObject = { exports: {} }
 
-    mList.set(id, [
-        0,
-        moduleObject,
-        () => {
+    mList.set(id, {
+        flags: 0,
+        module: moduleObject,
+        factory: () => {
             handleFactoryCall(factory, moduleObject)
         },
-        undefined, // Imported default
-        undefined, // Imported all
-        undefined, // Error
-    ])
+        importedDefault: undefined,
+        importedAll: undefined,
+        error: undefined,
+    })
 }
 
 /**
@@ -107,7 +106,7 @@ function handleFactoryCall(
             metroImportAll,
             moduleObject,
             moduleObject.exports,
-            mDeps[mInitializingId],
+            mDeps.get(mInitializingId)!,
         )
 
         const { exports } = moduleObject

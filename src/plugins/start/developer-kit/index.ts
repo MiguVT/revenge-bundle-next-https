@@ -20,11 +20,12 @@ const defaultStorage: Storage = {
     },
 }
 
+// TODO(PalmDevs): only register in development builds once updates can be made automatic
 registerPlugin<{ storage: Storage }>(
     {
-        id: 'revenge.settings.developer',
-        name: 'Developer Settings',
-        description: 'Developer settings menus for Revenge',
+        id: 'revenge.developer-kit',
+        name: 'Developer Kit',
+        description: 'Tools assisting Revenge developers.',
         author: 'Revenge',
         icon: 'WrenchIcon',
     },
@@ -43,13 +44,14 @@ registerPlugin<{ storage: Storage }>(
             if (api_.plugin.flags & PluginFlags.EnabledLate)
                 refreshSettingsOverviewScreen()
 
-            api_.cleanup(refreshSettingsOverviewScreen)
-
             Promise.all([import('./react-devtools'), api.storage.get()]).then(
                 ([rdt, settings]) => {
                     if (settings.devtools.autoConnect) rdt.connect()
                 },
             )
+        },
+        stop() {
+            refreshSettingsOverviewScreen()
         },
     },
     PluginFlags.Enabled,

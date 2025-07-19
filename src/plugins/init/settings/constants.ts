@@ -3,9 +3,6 @@ export const Setting = {
 
     Revenge: 'Revenge',
     RevengePlugins: 'RevengePlugins',
-    RevengeThemes: 'RevengeThemes',
-    RevengeFonts: 'RevengeFonts',
-    RevengeCustomPage: 'RevengeCustomPage',
 
     // SUBSETTINGS
 
@@ -23,7 +20,4 @@ export const Setting = {
 export const RouteNames = {
     [Setting.Revenge]: 'Revenge',
     [Setting.RevengePlugins]: 'Revenge Plugins',
-    [Setting.RevengeThemes]: 'Revenge Themes',
-    [Setting.RevengeFonts]: 'Revenge Fonts',
-    [Setting.RevengeCustomPage]: 'Revenge Custom Page',
 } as const
