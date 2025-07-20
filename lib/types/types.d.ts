@@ -1,6 +1,26 @@
 // All of these typings are exported, be careful what you export here!
 
 import type { Metro } from '@revenge-mod/modules/types'
+import type {
+    ImageProps,
+    ScrollViewProps,
+    TextProps,
+    ViewProps,
+} from 'react-native'
+
+/// REACT NATIVE COMPONENTS
+
+declare module 'react' {
+    namespace JSX {
+        interface IntrinsicElements {
+            // TODO(PalmDevs): more intrinsic elements?
+            RCTView: ViewProps
+            RCTImage: ImageProps
+            RCTScrollView: ScrollViewProps
+            RCTText: TextProps
+        }
+    }
+}
 
 /// HERMES
 
@@ -54,7 +74,7 @@ declare global {
     var __REACT_DEVTOOLS_GLOBAL_HOOK__: unknown | undefined
     var __REACT_DEVTOOLS__:
         | {
-              version: string
+              version: number
               exports: {
                   connectToDevTools(opts: {
                       host?: string

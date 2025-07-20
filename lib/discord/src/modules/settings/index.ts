@@ -2,9 +2,10 @@ import { ReactNavigationNative } from '@revenge-mod/externals/react-navigation'
 import { noop } from '@revenge-mod/utils/callback'
 import { findInTree } from '@revenge-mod/utils/tree'
 import { Constants } from '../../common'
+import { sLoaded } from '../../start'
 import { RootNavigationRef } from '../main_tabs_v2'
-import { sData, sSubscriptions } from './_internal'
-import type { NavigationState } from '@react-navigation/core'
+import { sConfig, sSections, sSubscriptions } from './_internal'
+import type { NavigationState, PartialState } from '@react-navigation/core'
 import type { DiscordModules } from '../../types'
 
 export type SettingsItem = DiscordModules.Modules.Settings.SettingsItem
@@ -16,7 +17,7 @@ export type SettingsModulesLoadedSubscription = () => void
  * Checks if the settings modules are loaded.
  */
 export function isSettingsModulesLoaded() {
-    return sData[2]
+    return sLoaded
 }
 
 /**
@@ -50,9 +51,9 @@ export function onSettingsModulesLoaded(
  * @returns A function to unregister the settings section.
  */
 export function registerSettingsSection(key: string, section: SettingsSection) {
-    sData[0][key] = section
+    sSections[key] = section
     return () => {
-        delete sData[0][key]
+        delete sSections[key]
     }
 }
 
@@ -64,9 +65,9 @@ export function registerSettingsSection(key: string, section: SettingsSection) {
  * @returns A function to unregister the settings item.
  */
 export function registerSettingsItem(key: string, item: SettingsItem) {
-    sData[1][key] = item
+    sConfig[key] = item
     return () => {
-        delete sData[1][key]
+        delete sConfig[key]
     }
 }
 
@@ -77,9 +78,9 @@ export function registerSettingsItem(key: string, item: SettingsItem) {
  * @returns A function to unregister the settings items.
  */
 export function registerSettingsItems(record: Record<string, SettingsItem>) {
-    Object.assign(sData[1], record)
+    Object.assign(sConfig, record)
     return () => {
-        for (const key in record) delete sData[1][key]
+        for (const key in record) delete sConfig[key]
     }
 }
 
@@ -91,7 +92,7 @@ export function registerSettingsItems(record: Record<string, SettingsItem>) {
  * @returns A function to remove the settings item from the section.
  */
 export function addSettingsItemToSection(key: string, item: string) {
-    const section = sData[0][key]
+    const section = sSections[key]
     if (!section) throw new Error(`Section "${key}" does not exist`)
 
     const newLength = section.settings.push(item)
@@ -110,31 +111,17 @@ const { CommonActions, StackActions } = ReactNavigationNative
  */
 export async function refreshSettingsOverviewScreen(renavigate?: boolean) {
     const navigation = RootNavigationRef.getRootNavigationRef()
-    if (!navigation.isReady()) return false
+    if (!navigation.isReady()) return
 
-    const state = navigation.getState()
-
+    let state = navigation.getRootState()
     // State with SettingsOverviewScreen
-    const settingsState = findInTree(
-        state,
-        (node): node is NavigationState =>
-            Array.isArray(node.routes) &&
-            node.routes[0]?.name ===
-                (Constants.UserSettingsSections as Record<string, string>)
-                    .OVERVIEW,
-    )
-
+    let settingsState = findInTree(state, isNavigationSettingsState)
     // We're currently not on the settings screen, so we don't need to reset
-    if (!settingsState) return false
+    if (!settingsState) return
 
     if (renavigate) {
-        const mainState = findInTree(
-            state,
-            (node): node is NavigationState =>
-                Array.isArray(node.routes) && node.routes.length > 1,
-        )
-
-        if (!mainState) return false
+        const mainState = findInTree(state, isNavigationMainState)
+        if (!mainState) return
 
         navigation.dispatch({
             ...CommonActions.goBack(),
@@ -143,22 +130,42 @@ export async function refreshSettingsOverviewScreen(renavigate?: boolean) {
 
         navigation.navigate(mainState.routes[mainState.index].name)
 
-        // Dispatch on next paint
+        // Wait for navigation to complete and reset to the settings state
         requestAnimationFrame(() => {
-            navigation.dispatch(CommonActions.reset(settingsState))
+            navigation.reset({
+                index: settingsState!.routes.length - 1,
+                routes: settingsState!.routes,
+            } as PartialState<NonNullable<typeof settingsState>>)
         })
     } else {
-        const {
-            key: target,
-            routes: [{ name, key: source }],
-        } = settingsState
+        requestAnimationFrame(() => {
+            // Get updated state
+            state = navigation.getRootState()
+            settingsState = findInTree(state, isNavigationSettingsState)
+            if (!settingsState) return
 
-        navigation.dispatch({
-            ...StackActions.replace(name),
-            source,
-            target,
+            const {
+                key: target,
+                routes: [{ name, key: source }],
+            } = settingsState
+
+            navigation.dispatch({
+                ...StackActions.replace(name),
+                source,
+                target,
+            })
         })
     }
+}
 
-    return true
+function isNavigationMainState(state: any): state is NavigationState {
+    return Array.isArray(state.routes) && state.routes.length > 1
+}
+
+function isNavigationSettingsState(state: any): state is NavigationState {
+    return (
+        Array.isArray(state.routes) &&
+        state.routes[0]?.name ===
+            (Constants.UserSettingsSections as Record<string, string>).OVERVIEW
+    )
 }

@@ -1,4 +1,3 @@
-import { mInitializingId, mUninitialized } from '@revenge-mod/modules/_/metro'
 import {
     byDependencies,
     byName,
@@ -9,6 +8,10 @@ import {
     lookupModules,
 } from '@revenge-mod/modules/finders/lookup'
 import { waitForModules } from '@revenge-mod/modules/finders/wait'
+import {
+    mInitializingId,
+    mUninitialized,
+} from '@revenge-mod/modules/metro/patches'
 import { getModuleDependencies } from '@revenge-mod/modules/metro/utils'
 import { proxify } from '@revenge-mod/utils/proxy'
 import { aOverrides } from './_internal'
@@ -31,38 +34,6 @@ const byAssetSourceResolver = byDependencies([
     undefined,
     invariantId,
 ])
-
-/**
- * If you need to use this ID before assets-registry is initialized, interact with AssetsRegistry proxy first.
- *
- * ```js
- * preinit() {
- *   AssetsRegistry.getAssetByID(0)
- *   // Module ID will now be set!
- *   AssetsRegistryModuleId // ...
- * }
- * ```
- */
-export let AssetsRegistryModuleId: number | undefined
-
-export let AssetsRegistry: ReactNative.AssetsRegistry = proxify(() => {
-    for (const [, id] of lookupModules(byDependencies([[]]), {
-        initialize: false,
-        uninitialized: true,
-    })) {
-        const deps = getModuleDependencies(id)!
-        if (deps.length !== 1) continue
-
-        // The module next to assets-registry is AssetSourceResolver
-        if (byAssetSourceResolver(deps[0] + 1)) {
-            const module = __r(id)
-            // ID will be set by the wait below
-            if (module?.registerAsset) return (AssetsRegistry = module)
-        }
-    }
-
-    throw new Error('assets-registry not found')
-})
 
 // Tracking/caching assets
 const unsubAR = waitForModules(
@@ -112,6 +83,38 @@ const unsubAR = waitForModules(
         }
     },
 )
+
+/**
+ * If you need to use this ID before assets-registry is initialized, interact with AssetsRegistry proxy first.
+ *
+ * ```js
+ * preinit() {
+ *   AssetsRegistry.getAssetByID(0)
+ *   // Module ID will now be set!
+ *   AssetsRegistryModuleId // ...
+ * }
+ * ```
+ */
+export let AssetsRegistryModuleId: number | undefined
+
+export let AssetsRegistry: ReactNative.AssetsRegistry = proxify(() => {
+    for (const [, id] of lookupModules(byDependencies([[]]), {
+        initialize: false,
+        uninitialized: true,
+    })) {
+        const deps = getModuleDependencies(id)!
+        if (deps.length !== 1) continue
+
+        // The module next to assets-registry is AssetSourceResolver
+        if (byAssetSourceResolver(deps[0] + 1)) {
+            const module = __r(id)
+            // ID will be set by the wait below
+            if (module?.registerAsset) return (AssetsRegistry = module)
+        }
+    }
+
+    throw new Error('assets-registry not found')
+})
 
 // Asset overrides
 const unsubRAS = waitForModules(

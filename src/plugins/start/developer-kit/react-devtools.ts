@@ -24,12 +24,6 @@ const events = new TypedEventEmitter<{
     errored: [unknown]
 }>()
 
-const CircleXIcon = lookupGeneratedIconComponent(
-    'CircleXIcon',
-    'CircleXIcon-secondary',
-    'CircleXIcon-primary',
-)
-
 export function connect() {
     if (!RDTContext.active || RDTContext.ws) return
 
@@ -54,7 +48,12 @@ export function connect() {
 
         ToastActionCreators.open({
             key: 'REACT_DEVTOOLS_ERROR',
-            IconComponent: CircleXIcon,
+            // TODO(PalmDevs): declare this on top of file once asset cache can be loaded earlier
+            IconComponent: lookupGeneratedIconComponent(
+                'CircleXIcon',
+                'CircleXIcon-secondary',
+                'CircleXIcon-primary',
+            ),
             content: err,
         })
     })
