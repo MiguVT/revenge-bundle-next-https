@@ -1,14 +1,12 @@
 import type { AnyObject } from './types'
 
-export { objectFreeze } from './patches/object'
-
 /**
  * Simple check if to see if value is an object.
  *
  * @param val The value to check.
  */
 export function isObject(val: any): val is AnyObject {
-    return val?.__proto__ === Object.prototype
+    return typeof val === 'object' && val !== null && !Array.isArray(val)
 }
 
 /**
