@@ -1,7 +1,10 @@
+import { noop } from '@revenge-mod/utils/callback'
+import { getCachedFilterRegistry } from '../caches'
 import { mInitialized } from '../metro/patches'
 import {
     onAnyModuleInitialized,
     onModuleFinishedImporting,
+    onModuleInitialized,
 } from '../metro/subscriptions'
 import { getInitializedModuleExports } from '../metro/utils'
 import {
@@ -33,7 +36,18 @@ export type WaitForModulesOptions<
     ReturnNamespace extends boolean = boolean,
     All extends boolean = boolean,
 > = RunFilterReturnExportsOptions<ReturnNamespace> &
-    BaseWaitForModulesOptions<All>
+    BaseWaitForModulesOptions<All> & {
+        /**
+         * Use cached results **only** (if possible).
+         * If there is no cache result, this works as if you did not pass this option at all.
+         *
+         * By default, waits cache results but does not use them, because new modules may still be found.
+         * Use this option as an optimization if you are sure that you don't need to find new modules once results are cached.
+         *
+         * @default false
+         */
+        cached?: boolean
+    }
 
 export type WaitForModulesResult<
     F extends Filter,
@@ -83,6 +97,45 @@ export function waitForModules(
     callback: WaitForModulesCallback<any>,
     options?: WaitForModulesOptions,
 ): WaitForModulesUnsubscribeFunction {
+    if (options?.cached) {
+        const reg = getCachedFilterRegistry(filter.key)
+        if (reg === null) return noop
+
+        if (reg) {
+            if (__BUILD_FLAG_DEBUG_MODULE_WAITS__)
+                nativeLoggingHook(
+                    `\u001b[32mUsing cached results for wait \u001b[33m${filter.key}\u001b[0m`,
+                    1,
+                )
+
+            const runCachedCallback = (
+                id: Metro.ModuleID,
+                exports: Metro.ModuleExports,
+            ) => {
+                const flag = reg[id]
+
+                DEBUG_logWaitMatched(filter.key, id, flag, true)
+                callback(
+                    exportsFromFilterResultFlag(flag, exports, options),
+                    id,
+                )
+            }
+
+            const cleanups: Array<() => void> = []
+
+            for (const sId of Object.keys(reg)) {
+                const id = Number(sId)
+                if (mInitialized.has(id)) continue
+
+                cleanups.push(onModuleInitialized(id, runCachedCallback))
+            }
+
+            return () => {
+                for (const cleanup of cleanups) cleanup()
+            }
+        }
+    }
+
     if (__BUILD_FLAG_DEBUG_MODULE_WAITS__)
         nativeLoggingHook(
             `\u001b[94mWaiting for module matching: \u001b[93m${filter.key}\u001b[0m`,
@@ -151,21 +204,16 @@ export function waitForModuleByImportedPath<T = any>(
     callback: WaitForModulesCallback<T>,
     options?: BaseWaitForModulesOptions,
 ): WaitForModulesUnsubscribeFunction {
-    const unsub = onModuleFinishedImporting(
-        options?.all
-            ? (id, cmpPath) => {
-                  if (path === cmpPath) {
-                      unsub()
-                      callback(getInitializedModuleExports(id), id)
-                  }
-              }
-            : (id, cmpPath) => {
-                  if (mInitialized.has(id) && path === cmpPath) {
-                      unsub()
-                      callback(getInitializedModuleExports(id), id)
-                  }
-              },
-    )
+    const unsub = onModuleFinishedImporting((id, cmpPath) => {
+        if (path === cmpPath) {
+            unsub()
+            // Module is not fully initialized yet, so we need to wait for it
+            onModuleInitialized(id, () => {
+                if (!options?.all || mInitialized.has(id))
+                    callback(getInitializedModuleExports(id), id)
+            })
+        }
+    })
 
     return unsub
 }
@@ -177,9 +225,10 @@ function DEBUG_logWaitMatched(
     key: string,
     id: Metro.ModuleID,
     flag: FilterResultFlag,
+    cached?: boolean,
 ) {
     nativeLoggingHook(
-        `\u001b[32mWait matched: \u001b[33m${key}\u001b[0m (matched ${id}, ${FilterResultFlagToHumanReadable[flag]})`,
+        `\u001b[32mWait matched: \u001b[33m${key}\u001b[0m (matched ${id}, ${FilterResultFlagToHumanReadable[flag]}${cached ? ', \u001b[92mcached\u001b[0m' : ''})`,
         1,
     )
 }
