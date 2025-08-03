@@ -1,5 +1,4 @@
 import '@revenge-mod/utils/patches/proxy'
-import '@revenge-mod/utils/patches/objects'
 
 import {
     onModuleFirstRequired,
@@ -19,10 +18,8 @@ onModuleFirstRequired(IndexModuleId, function onIndexRequired() {
             nativeLoggingHook(`\u001b[31m--- PREINIT STAGE ---\u001b[0m`, 1)
 
         // Initialize preinit libraries
-        require('@revenge-mod/utils/preinit')
         require('@revenge-mod/react/preinit')
         require('@revenge-mod/assets/preinit')
-        require('@revenge-mod/storage/preinit')
         require('@revenge-mod/discord/preinit')
 
         // Run all preinit plugins

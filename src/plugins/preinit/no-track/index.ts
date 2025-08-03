@@ -1,4 +1,3 @@
-import { DispatcherModuleId } from '@revenge-mod/discord/common/flux'
 import { byProps } from '@revenge-mod/modules/finders/filters'
 import { waitForModules } from '@revenge-mod/modules/finders/wait'
 import { getModuleDependencies } from '@revenge-mod/modules/metro/utils'
@@ -7,6 +6,10 @@ import { InternalPluginFlags, registerPlugin } from '@revenge-mod/plugins/_'
 import { PluginFlags } from '@revenge-mod/plugins/constants'
 import { noop } from '@revenge-mod/utils/callback'
 import { getCurrentStack } from '@revenge-mod/utils/error'
+
+const cachedOnly = {
+    cached: true,
+}
 
 // TODO(plugins/no-track): Block Sentry native-side
 registerPlugin(
@@ -43,6 +46,7 @@ registerPlugin(
                     instead(SentryUtils, 'setTags', noop)
                     instead(SentryUtils, 'setUser', noop)
                 },
+                cachedOnly,
             )
 
             // modules/errors/native/SentryInitUtils.tsx
@@ -53,6 +57,7 @@ registerPlugin(
 
                     instead(SentryInitUtils, 'initSentry', noop)
                 },
+                cachedOnly,
             )
 
             // Discord uses ReactNavigationInstrumentation to track navigation
@@ -72,6 +77,7 @@ registerPlugin(
                         },
                     )
                 },
+                cachedOnly,
             )
 
             if (__DEV__)
@@ -87,7 +93,7 @@ registerPlugin(
 
             cleanup(unsubSU, unsubSIU, unsubSentryInst)
         },
-        start({ cleanup, logger }) {
+        init({ cleanup }) {
             // utils/AnalyticsUtils.tsx
             const unsubAU = waitForModules(
                 byProps<{
@@ -100,20 +106,31 @@ registerPlugin(
                 AnalyticsUtils => {
                     unsubAU()
 
-                    logger.info('Patching AnalyticsUtils...')
                     instead(AnalyticsUtils.default, 'track', noop)
                     instead(AnalyticsUtils, 'trackNetworkAction', noop)
 
-                    for (const key in AnalyticsUtils.default
-                        .AnalyticsActionHandlers)
-                        instead(
-                            AnalyticsUtils.default.AnalyticsActionHandlers,
-                            key,
-                            noop,
-                        )
+                    const { AnalyticsActionHandlers: handlers } =
+                        AnalyticsUtils.default
+
+                    for (const key of Object.keys(handlers))
+                        instead(handlers, key, noop)
                 },
+                cachedOnly,
             )
 
+            cleanup(unsubAU)
+        },
+        start({
+            cleanup,
+            logger,
+            unscoped: {
+                discord: {
+                    common: {
+                        flux: { DispatcherModuleId },
+                    },
+                },
+            },
+        }) {
             // modules/app_analytics/useTrackImpression.tsx
             const unsubTI = waitForModules(
                 byProps<{
@@ -123,11 +140,10 @@ registerPlugin(
                 useTrackImpression => {
                     unsubTI()
 
-                    logger.info('Patching useTrackImpression...')
-
                     instead(useTrackImpression, 'trackImpression', noop)
                     instead(useTrackImpression, 'default', noop)
                 },
+                cachedOnly,
             )
 
             // actions/AnalyticsTrackActionCreators.tsx
@@ -141,9 +157,10 @@ registerPlugin(
                         instead(AnalyticsTrackActionCreators, 'track', noop)
                     }
                 },
+                cachedOnly,
             )
 
-            cleanup(unsubAU, unsubTI, unsubATAC)
+            cleanup(unsubTI, unsubATAC)
         },
         stop({ plugin }) {
             plugin.flags |= PluginFlags.ReloadRequired

@@ -17,7 +17,7 @@ import {
 } from './subscriptions/_internal'
 import type { Metro, RevengeMetro } from '../types'
 
-export let mInitializingId: Metro.ModuleID | null = null
+export let mInitializingId: Metro.ModuleID | undefined
 /** Uninitialized IDs (not blacklisted) */
 export const mUninitialized = new Set<Metro.ModuleID>()
 /** Initialized IDs (not blacklisted) */
@@ -116,22 +116,23 @@ function handleFactoryCall(
             // Blacklist exports that:
             // - are primitives (https://developer.mozilla.org/en-US/docs/Glossary/Primitive)
             // - are empty objects
-            if (exports instanceof Object)
-                switch (exports.__proto__) {
-                    case Object.prototype:
-                    // This null case is for nativeModuleProxy specifically
-                    // @ts-expect-error: Intentional
-                    // biome-ignore lint/suspicious/noFallthroughSwitchClause: Intentional
-                    case null:
-                        if (!Reflect.ownKeys(exports).length) {
-                            cacheBlacklistedModule(mInitializingId)
-                            break
-                        }
+            switch (typeof exports) {
+                case 'function':
+                    mInitialized.add(mInitializingId)
+                    break
 
-                    default:
+                // @ts-expect-error: Intentional
+                // biome-ignore lint/suspicious/noFallthroughSwitchClause: Intentional
+                case 'object': {
+                    if (Object.keys(exports).length) {
                         mInitialized.add(mInitializingId)
+                        break
+                    }
                 }
-            else cacheBlacklistedModule(mInitializingId)
+
+                default:
+                    cacheBlacklistedModule(mInitializingId)
+            }
         }
 
         executeInitializeSubscriptions(mInitializingId, exports)

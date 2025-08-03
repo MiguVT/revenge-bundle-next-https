@@ -3,6 +3,7 @@
  * This is especially useful for blacklisting exports that cannot be patched.
  */
 
+import { asap } from './callback'
 import { getCurrentStack } from './error'
 import { pTargets } from './patches/proxy'
 
@@ -21,7 +22,7 @@ export function isProxy(obj: object) {
  * @param obj The object to check
  */
 export function isProxified(obj: object) {
-    return _metas.has(obj)
+    return pMetadata.has(obj)
 }
 
 /**
@@ -37,7 +38,7 @@ export function getProxyTarget(obj: object) {
 // Heavily inspired by Wintry's lazy utils, but more optimized and stripped down, with a few fixes.
 // https://github.com/pylixonly/wintry/blob/main/src/utils/lazy.ts
 
-const _metas = new WeakMap<
+const pMetadata = new WeakMap<
     object,
     {
         factory: () => unknown
@@ -61,7 +62,7 @@ const _handler = {
         const target = unproxifyFromHint(hint)
         const val = Reflect.get(target!, p, recv)
 
-        if (_metas.get(hint)?.bind && val instanceof Function)
+        if (pMetadata.get(hint)?.bind && typeof val === 'function')
             return new Proxy(val, {
                 // If thisArg happens to be a proxified value, we will use the target object instead
                 apply: (fn, thisArg, args) =>
@@ -131,14 +132,17 @@ export function proxify<T>(signal: () => T, options?: ProxifyOptions): T {
     // biome-ignore lint/complexity/useArrowFunction: We need a function with a constructor
     const hint = options?.hint ?? function () {}
 
-    _metas.set(hint, {
+    pMetadata.set(hint, {
         factory: signal,
         bind: options?.bindMethods ?? false,
         cacheable: options?.cache ?? false,
     })
 
     if (__BUILD_FLAG_DEBUG_PROXIFIED_VALUES__)
-        (globalThis.setImmediate ?? ((x: () => void) => x()))(() => {
+        // Prevent race conditions where proxified values with a self modifying signal gets called,
+        // modifying the original value to a non-proxified value, causing subsequent destructure() calls to fail
+
+        asap(() => {
             if (unproxifyFromHint(hint) == null)
                 DEBUG_warnNullishProxifiedValue()
         })
@@ -182,7 +186,7 @@ export function unproxify<T extends object>(proxified: T): T {
 }
 
 function unproxifyFromHint(hint: object) {
-    const meta = _metas.get(hint)!
+    const meta = pMetadata.get(hint)!
     if (meta.cacheable)
         return meta.cache ?? ((meta.cache = meta.factory()) as any)
     return meta.factory() as any
