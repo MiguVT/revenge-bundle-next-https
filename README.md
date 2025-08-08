@@ -70,7 +70,7 @@ To update to Revenge Next from Revenge Classic, follow these steps:
 Revenge Next is updated regularly with new features and bug fixes. To update to the latest build, follow these steps:
 
 1. Host a HTTP server that points to a new `revenge.bundle` file.
-2. Head to **Settings** > **Revenge** > **Developer**.
+2. Head to **Settings** > **Developer** (under the **Revenge** section).
 3. Tap on the **Evaluate JavaScript** option.
 4. Paste and evaluate the following snippet. Make sure to modify the URL to point to your newly hosted `revenge.bundle` file:
 
@@ -81,3 +81,41 @@ Revenge Next is updated regularly with new features and bug fixes. To update to 
     ```
 
 5. Restart Discord.
+
+## 👷 Developing with Revenge Next
+
+You'll need to have [Bun](https://bun.com/) installed. Once you have Bun, follow these steps:
+
+```sh
+# Install dependencies
+bun install
+```
+
+---
+
+```sh
+# Build Revenge Next
+bun run build
+
+# Build Revenge Next with debugging enabled (slow, don't use in production)
+bun run build --dev
+```
+
+```sh
+# Start the development server
+bun run dev
+
+# Build as production
+bun run dev --prod
+```
+
+<sub>Builds are generated at `dist/revenge.bundle`.</sub>
+
+```sh
+# Build types for external consumers
+bun run types
+```
+
+<sub>Types are generated at `dist/types`. To consume, include `<dir>/globals.d.ts`, and map `@revenge-mod/*` to `<dir>/lib/*`.</sub>
+<br>
+<sub>Bundlers will need to map imports to property access on `revenge` turning `kebab-case` and `snake_case` to `camelCase`.</sub>
