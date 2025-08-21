@@ -43,7 +43,7 @@ export namespace Metro {
          * Whether factory has been successfully called
          * */
         isInitialized: boolean
-        publicModule: ModuleExports
+        publicModule: Module
     }
 
     export type Module = {
@@ -72,9 +72,14 @@ export namespace Metro {
 }
 
 export namespace RevengeMetro {
+    export type Module = {
+        id: Metro.ModuleID
+        exports: Metro.ModuleExports
+    }
+
     export type ModuleDefinition<Initialized = boolean> = {
         flags: number
-        module: Metro.Module
+        module?: Module
         factory: If<Initialized, undefined, () => void>
         importedDefault?: Metro.ModuleExports
         importedAll?: Metro.ModuleExports

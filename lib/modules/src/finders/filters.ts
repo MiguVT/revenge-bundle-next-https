@@ -41,7 +41,7 @@ export type FilterGenerator<G extends (...args: any[]) => Filter> = G & {
  *     // filter logic
  *     return true
  *   },
- *   ([arg1, arg2]) => `revenge.custom(${arg1}, ${arg2})`
+ *   ([arg1, arg2]) => `custom(${arg1}, ${arg2})`
  * )
  * ```
  *
@@ -327,16 +327,19 @@ function depCompare(
     root: Metro.ModuleID,
     parent: Metro.ModuleID,
 ): boolean {
-    if (b.l ? a.length < b.length : a.length !== b.length) return false
+    const lenA = a.length
+    const lenB = b.length
+    if (b.l ? lenA < lenB : lenA !== lenB) return false
 
-    for (let i = 0; i < b.length; i++) {
+    for (let i = 0; i < lenB; i++) {
         const compare = b[i]
         // Skip dynamic
         if (compare === undefined) continue
 
         const id = a[i]
 
-        if (Array.isArray(compare)) {
+        // Check if it's an array (typeof is faster than Array.isArray)
+        if (typeof compare === 'object') {
             // relative.withDependencies?
             if (compare.r && !depShallowCompare(compare.r, id, root, parent))
                 return false
@@ -380,19 +383,25 @@ function depGenFilterKey(deps: ComparableDependencyMap): string {
         const dep = deps[i]
 
         if (dep === undefined) key += ','
-        else if (Array.isArray(dep)) {
+        else if (typeof dep === 'object') {
             if (dep.l) key += '#'
+            // relative.withDependencies?
+            if (dep.r) key += depGenRelativeKeyPart(dep.r)
+
             key += `[${depGenFilterKey(dep)}],`
         } else {
-            if (dep & RelativeBit) {
-                const magnitude = depGetRelMagnitude(dep)
-                const prefix = dep & RelativeRootBit ? '~' : '^'
-                key += `${prefix}${magnitude},`
-            } else key += `${dep},`
+            if (dep & RelativeBit) key += depGenRelativeKeyPart(dep)
+            else key += `${dep},`
         }
     }
 
     return key.substring(0, key.length - 1)
+}
+
+function depGenRelativeKeyPart(dep: number) {
+    const magnitude = depGetRelMagnitude(dep)
+    const prefix = dep & RelativeRootBit ? '~' : '^'
+    return `${prefix}${magnitude},`
 }
 
 export type Every = FilterGenerator<{
