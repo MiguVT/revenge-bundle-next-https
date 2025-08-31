@@ -1,8 +1,7 @@
 import { lookupModule } from '@revenge-mod/modules/finders'
 import {
-    byDependencies,
-    byProps,
-    preferExports,
+    withDependencies,
+    withProps,
 } from '@revenge-mod/modules/finders/filters'
 import {
     ReactJSXRuntimeModuleId,
@@ -12,7 +11,7 @@ import {
 import { proxify } from '@revenge-mod/utils/proxy'
 import type { DiscordModules } from '../../types'
 
-const { loose, relative } = byDependencies
+const { loose, relative } = withDependencies
 
 export type SettingListRenderer =
     DiscordModules.Modules.Settings.SettingListRenderer
@@ -21,15 +20,14 @@ export type SettingListRenderer =
 export let SettingListRenderer: SettingListRenderer = proxify(
     () => {
         const [module] = lookupModule(
-            preferExports(
-                byProps<SettingListRenderer>('SettingsList'),
-                byDependencies(
+            withProps<SettingListRenderer>('SettingsList').and(
+                withDependencies(
                     loose([
                         ReactModuleId,
                         ReactNativeModuleId,
                         relative(1),
                         relative(2),
-                        undefined,
+                        null,
                         ReactJSXRuntimeModuleId,
                     ]),
                 ),

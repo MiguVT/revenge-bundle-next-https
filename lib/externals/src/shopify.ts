@@ -1,8 +1,7 @@
 import { lookupModule } from '@revenge-mod/modules/finders'
 import {
-    byDependencies,
-    byProps,
-    preferExports,
+    withDependencies,
+    withProps,
 } from '@revenge-mod/modules/finders/filters'
 import {
     ReactJSXRuntimeModuleId,
@@ -14,20 +13,19 @@ import { proxify } from '@revenge-mod/utils/proxy'
 export let FlashList: typeof import('@shopify/flash-list') = proxify(
     () => {
         const [module] = lookupModule(
-            preferExports(
-                byProps<typeof FlashList>('FlashList'),
-                byDependencies([
+            withProps<typeof FlashList>('FlashList').and(
+                // Dependencies. One in brackets are dynamic or late initialized.
+                // [React, RN, JSXRuntime, (FlashListExports), (Reanimated), (RNBottomSheet), ImportTracker, (BottomSheetFlashList)]
+                withDependencies([
                     ReactModuleId,
                     ReactNativeModuleId,
                     ReactJSXRuntimeModuleId,
-                    undefined,
-                    undefined,
-                    undefined,
+                    null,
+                    null,
+                    null,
                     2,
-                    undefined,
+                    null,
                 ]),
-                // Dependencies. One in brackets are dynamic or late initialized.
-                // [React, RN, JSXRuntime, (FlashListExports), (Reanimated), (RNBottomSheet), ImportTracker, (BottomSheetFlashList)]
             ),
             {
                 uninitialized: true,
