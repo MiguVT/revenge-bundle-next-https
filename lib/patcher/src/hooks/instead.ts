@@ -13,6 +13,7 @@ import type {
     AbstractNewable,
     Callable,
     FiniteDomain,
+    HookOptions,
     InsteadHook,
     UnknownFunction,
     UnpatchFunction,
@@ -105,19 +106,27 @@ function unpatchInstead<T extends UnknownFunction>(
  * @param parent The parent object containing the method to patch.
  * @param key The key of the method to patch.
  * @param hook The hook function to execute instead of the original method.
+ * @param options Optional configuration including priority.
  *
  * @return A function to unpatch.
  */
 export function instead<
     Parent extends Record<Key, UnknownFunction>,
     Key extends keyof Parent,
->(parent: Parent, key: Key, hook: InsteadHook<Parent[Key]>): UnpatchFunction
+>(
+    parent: Parent,
+    key: Key,
+    hook: InsteadHook<Parent[Key]>,
+    options?: HookOptions,
+): UnpatchFunction
 export function instead<Key extends PropertyKey, Value extends UnknownFunction>(
     parent: Record<Key, Value>,
     key: FiniteDomain<Key>,
     hook: InsteadHook<Value>,
+    options?: HookOptions,
 ): UnpatchFunction {
     const target = parent[key]
+    const priority = options?.priority ?? 0
 
     let state = patchedFunctionProxyStates.get(target)
 
@@ -128,13 +137,30 @@ export function instead<Key extends PropertyKey, Value extends UnknownFunction>(
     hookNode.target = target
     hookNode.unpatched = false
     hookNode.hook = hook
+    hookNode.priority = priority
     hookNode.prev = undefined
 
     if (state?.parent === parent && state.key === key) {
-        const head = state.instead
-        hookNode.next = head
-        if (head) head.prev = hookNode
-        state.instead = hookNode
+        let current = state.instead
+        let prev: InsteadHookNode<Value> | undefined
+
+        while (current && current.priority > priority) {
+            prev = current
+            current = current.next
+        }
+
+        hookNode.next = current
+
+        if (prev) {
+            prev.next = hookNode
+            hookNode.prev = prev
+        } else {
+            state.instead = hookNode
+        }
+
+        if (current) {
+            current.prev = hookNode
+        }
     } else {
         hookNode.next = undefined
         state = createPatchedFunctionProxy(

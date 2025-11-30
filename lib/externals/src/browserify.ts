@@ -17,9 +17,6 @@ export let nodeUtil: typeof import('node:util') = proxify(
                     [],
                 ]),
             ),
-            {
-                uninitialized: true,
-            },
         )
 
         if (module) return (nodeUtil = module)

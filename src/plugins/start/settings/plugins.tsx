@@ -1,43 +1,36 @@
 import TableRowAssetIcon from '@revenge-mod/components/TableRowAssetIcon'
+import { AlertActionCreators } from '@revenge-mod/discord/actions'
 import {
     refreshSettingsNavigator,
     registerSettingsItem,
 } from '@revenge-mod/discord/modules/settings'
-import { pEmitter } from '@revenge-mod/plugins/_'
-import { proxify } from '@revenge-mod/utils/proxy'
+import { pEmitter, pList } from '@revenge-mod/plugins/_'
+import { PluginFlags } from '@revenge-mod/plugins/constants'
 import { useLayoutEffect } from 'react'
+import defer * as NavigatorHeaderWithIcon from './components/NavigatorHeaderWithIcon'
+import PluginsFailedToStartAlert from './components/PluginsFailedToStartAlert'
+import PluginsRequireReloadAlert from './components/PluginsRequireReloadAlert'
 import { Setting } from './constants'
 import type { StackScreenProps } from '@react-navigation/stack'
 import type { ReactNavigationParamList } from '@revenge-mod/externals/react-navigation'
 import type { PluginApi } from '@revenge-mod/plugins/types'
 
-type NavigatorHeaderWithIcon =
-    typeof import('./components/NavigatorHeaderWithIcon')['default']
-
-let NavigatorHeaderWithIcon = proxify(
-    (): NavigatorHeaderWithIcon =>
-        (NavigatorHeaderWithIcon =
-            require('./components/NavigatorHeaderWithIcon').default),
-    {},
-)
+/// SETTINGS ROUTES
 
 pEmitter.on('started', plugin => {
     if (plugin.SettingsComponent) {
-        refreshSettingsNavigator()
-
         const api = plugin.api as PluginApi<any>
+        const Component = plugin.SettingsComponent!
 
         function PluginSettings({
             navigation,
         }: StackScreenProps<ReactNavigationParamList>) {
-            const SC = plugin.SettingsComponent!
-
             // biome-ignore lint/correctness/useExhaustiveDependencies: We only want to set options once
             useLayoutEffect(() => {
                 if (plugin.manifest.icon)
                     navigation.setOptions({
                         headerTitle: () => (
-                            <NavigatorHeaderWithIcon
+                            <NavigatorHeaderWithIcon.default
                                 title={plugin.manifest.name}
                                 icon={plugin.manifest.icon!}
                             />
@@ -49,7 +42,7 @@ pEmitter.on('started', plugin => {
                     })
             }, [])
 
-            return <SC api={api} />
+            return <Component api={api} />
         }
 
         api.cleanup(
@@ -65,8 +58,51 @@ pEmitter.on('started', plugin => {
                     getComponent: () => PluginSettings,
                 },
             }),
+            refreshSettingsNavigator,
             // TODO(PalmDevs): In the future, we may allow pinning plugin settings, so we'll need this cleanup
             // () => refreshSettingsOverviewScreen(),
         )
+
+        refreshSettingsNavigator()
     }
 })
+
+/// RELOAD REQUIRED ALERT
+
+function showReloadRequiredAlertIfNeeded() {
+    const plugins = [...pList.values()].filter(
+        plugin => plugin.flags & PluginFlags.ReloadRequired,
+    )
+
+    if (!plugins.length) return
+
+    AlertActionCreators.openAlert(
+        'plugins-require-reload',
+        <PluginsRequireReloadAlert plugins={plugins} />,
+    )
+}
+
+function showErrorAlertIfNeeded() {
+    const plugins = [...pList.values()].filter(
+        plugin => plugin.flags & PluginFlags.Errored,
+    )
+
+    if (!plugins.length) return
+
+    AlertActionCreators.openAlert(
+        'plugins-failed-to-start',
+        <PluginsFailedToStartAlert plugins={plugins} />,
+    )
+}
+
+pEmitter.on('flagUpdate', plugin => {
+    if (plugin.flags & PluginFlags.ReloadRequired)
+        showReloadRequiredAlertIfNeeded()
+})
+
+pEmitter.on('stopped', plugin => {
+    if (plugin.flags & PluginFlags.Errored) showErrorAlertIfNeeded()
+})
+
+showErrorAlertIfNeeded()
+showReloadRequiredAlertIfNeeded()

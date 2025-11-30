@@ -146,18 +146,17 @@ registerPlugin(
                 cachedOnly,
             )
 
-            // actions/AnalyticsTrackActionCreators.tsx
+            // actions/AnalyticsTrackingActionCreators.tsx
             const unsubATAC = waitForModules(
                 withProps('track'),
-                (AnalyticsTrackActionCreators, id) => {
+                (AnalyticsTrackingActionCreators, id) => {
                     if (getModuleDependencies(id)![0] === DispatcherModuleId) {
                         unsubATAC()
 
                         logger.info('Patching AnalyticsTrackActionCreators...')
-                        instead(AnalyticsTrackActionCreators, 'track', noop)
+                        instead(AnalyticsTrackingActionCreators, 'track', noop)
                     }
                 },
-                cachedOnly,
             )
 
             cleanup(unsubTI, unsubATAC)

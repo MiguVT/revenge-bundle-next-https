@@ -10,7 +10,10 @@ import {
     ReactModuleId,
     ReactNativeModuleId,
 } from '@revenge-mod/react'
-import { FilterFlag } from '#modules/src/finders/filters/constants'
+import {
+    FilterFlag,
+    FilterScopes,
+} from '../../modules/src/finders/filters/constants'
 import type {
     Filter,
     FilterGenerator,
@@ -43,22 +46,24 @@ export type WithGeneratedIconComponent = FilterGenerator<
     <N extends string>(
         name: N,
         ...assets: string[]
-    ) => Filter<{ [K in N]: FC<any> }>
+    ) => Filter<{
+        Result: { [K in N]: FC<any> }
+        RequiresExports: boolean
+        Scopes: [
+            typeof FilterScopes.Uninitialized,
+            typeof FilterScopes.Initialized,
+        ]
+    }>
 >
 
 /**
  * Filter by icon component name and asset names.
- *
- * **Make sure to set `uninitialized: true` when using this filter in `lookupModule`!**
  *
  * @param names The component name, then the asset names if the component has multiple assets. *
  * @example
  * ```ts
  * const [CopyIconModule] = lookupModule(
  *   withGeneratedIconComponent('CopyIcon'),
- *   {
- *     uninitialized: true,
- *   }
  * )
  * if (CopyIconModule) {
  *   const { CopyIcon } = CopyIconModule
@@ -73,9 +78,6 @@ export type WithGeneratedIconComponent = FilterGenerator<
  *     'CircleXIcon-secondary',
  *     'CircleXIcon-primary',
  *   ),
- *   {
- *    uninitialized: true,
- *   }
  * )
  * ```
  */
@@ -119,6 +121,7 @@ export const withGeneratedIconComponent = createFilterGenerator<
     },
     names => `revenge.utils.discord.generatedIconComponent(${names.join(',')})`,
     FilterFlag.Dynamic,
+    FilterScopes.Uninitialized | FilterScopes.Initialized,
 ) as WithGeneratedIconComponent
 
 /**
@@ -141,9 +144,7 @@ export function lookupGeneratedIconComponent<N extends string>(
         if (__DEV__ && badFind) return
     }
 
-    const [module] = lookupModule(withGeneratedIconComponent(...names), {
-        uninitialized: true,
-    })
+    const [module] = lookupModule(withGeneratedIconComponent(...names))
 
     return module?.[names[0]] as FC<any> | undefined
 }

@@ -105,7 +105,7 @@ export interface PreInitPluginApi<
     decorate: PluginDecorateApi<O, 'PreInit'>
     unscoped: UnscopedPreInitPluginApi
     cleanup: PluginCleanupApi
-    plugin: Plugin
+    plugin: Plugin<O, 'PreInit'>
 }
 
 /**
@@ -118,6 +118,7 @@ export interface InitPluginApi<
 > extends PreInitPluginApi<O> {
     decorate: PluginDecorateApi<O, 'Init'>
     unscoped: UnscopedInitPluginApi
+    plugin: Plugin<O, 'Init'>
 }
 
 /**
@@ -130,6 +131,7 @@ export interface PluginApi<
 > extends InitPluginApi<O> {
     decorate: PluginDecorateApi<O, 'Start'>
     unscoped: UnscopedPluginApi
+    plugin: Plugin<O, 'Start'>
 }
 
 // TODO(plugins): support plugin bundles
@@ -208,26 +210,26 @@ export interface PluginLifecycles<
      *
      * @param api Plugin API (very limited).
      */
-    preInit?: (api: PreInitPluginApi<O>) => any
+    preInit?: (this: Plugin<O, 'PreInit'>, api: PreInitPluginApi<O>) => any
     /**
      * Runs as soon as all important modules are initialized.
      * After the index module (module 0)'s factory is run.
      *
      * @param api Plugin API (limited).
      */
-    init?: (api: InitPluginApi<O>) => any
+    init?: (this: Plugin<O, 'Init'>, api: InitPluginApi<O>) => any
     /**
      * Runs when the plugin can be started with all APIs available.
      *
      * @param api Plugin API.
      */
-    start?: (api: PluginApi<O>) => any
+    start?: (this: Plugin<O, 'Start'>, api: PluginApi<O>) => any
     /**
      * Runs when the plugin is stopped.
      *
      * @param api Plugin API.
      */
-    stop?: (api: PluginApi<O>) => any
+    stop?: (this: Plugin<O, 'Start'>, api: PluginApi<O>) => any
 }
 
 export interface Plugin<
@@ -262,11 +264,11 @@ export interface Plugin<
      * Disable the plugin.
      * This will also stop the plugin if it is running.
      */
-    disable(): Promise<void>
+    disable(this: Plugin<O, S>): Promise<void>
     /**
      * Stop the plugin.
      */
-    stop(): Promise<void>
+    stop(this: Plugin<O, S>): Promise<void>
 
     /**
      * The plugin API.

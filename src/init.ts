@@ -3,18 +3,21 @@ import '@revenge-mod/react/init'
 import '@revenge-mod/storage/init'
 
 import { onRunApplication } from '@revenge-mod/react/native'
-import { onError } from './preinit'
+import { onError } from '~index'
 
 const unsub = onRunApplication(() => {
     unsub()
 
     try {
-        require('./start')
+        // @as-require
+        import('./start')
     } catch (e) {
         onError(e)
     }
 })
 
 // Run all init plugins
-require('~/plugins/init')
-require('@revenge-mod/plugins/init')
+// @as-require
+import '~/plugins/init'
+// @as-require
+import '@revenge-mod/plugins/init'

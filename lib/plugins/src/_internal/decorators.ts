@@ -1,4 +1,4 @@
-import { getPluginDependencies, pMetadata } from '.'
+import { getInternalPluginMeta, getPluginDependencies } from '.'
 import type { Plugin, PluginApiDecorator } from '../types'
 import type { AnyPlugin, InternalPluginMeta } from '.'
 
@@ -6,7 +6,7 @@ export type PluginApiDecoratorStore<T extends 'PreInit' | 'Init' | 'Start'> =
     WeakMap<AnyPlugin, PluginApiDecorator<any, T>[]>
 
 // Set of plugins that will always decorate the API of every other plugin.
-export const pImplicitDeps = new Set<AnyPlugin>()
+export const pApis = new Set<AnyPlugin>()
 
 export const pDecoratorsPreInit: PluginApiDecoratorStore<'PreInit'> =
     new WeakMap()
@@ -32,17 +32,17 @@ export function decoratePluginApi(
     plugin: Plugin<any, any>,
     meta: InternalPluginMeta,
 ) {
-    // Don't decorate implicit dependencies
-    if (pImplicitDeps.has(plugin)) return
-
-    // Decorate the plugin API with implicit dependencies
-    // Implicit dependencies are internal plugin APIs, so we can run this without try-catch
-    // If anything fails, everything else would fail anyway
-    for (const dep of pImplicitDeps) {
-        const decorators = store.get(dep)
-        if (decorators)
-            for (const decorator of decorators) decorator(plugin, meta.options)
-    }
+    // Don't decorate API plugins with API plugins...
+    if (!pApis.has(plugin))
+        // Decorate the plugin API with implicit dependencies
+        // Implicit dependencies are internal plugin APIs, so we can run this without try-catch
+        // If anything fails, everything else would fail anyway
+        for (const dep of pApis) {
+            const decorators = store.get(dep)
+            if (decorators)
+                for (const decorator of decorators)
+                    decorator(plugin, meta.options)
+        }
 
     const deps = getPluginDependencies(plugin)
     const { handleError: handleDependentError } = meta
@@ -51,7 +51,7 @@ export function decoratePluginApi(
         const decorators = store.get(dep)
 
         if (decorators) {
-            const { handleError } = pMetadata.get(dep)!
+            const { handleError } = getInternalPluginMeta(dep)!
 
             try {
                 for (const decorator of decorators)

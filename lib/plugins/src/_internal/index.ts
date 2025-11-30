@@ -1,15 +1,23 @@
 import { TypedEventEmitter } from '@revenge-mod/discord/common/utils'
+import {
+    callBridgeMethod,
+    callBridgeMethodSync,
+} from '@revenge-mod/modules/native'
 import { getErrorStack } from '@revenge-mod/utils/error'
 import { sleepReject } from '@revenge-mod/utils/promise'
 import { pUnscopedApi as uapi } from '../apis'
-import { PluginFlags as Flag, PluginStatus as Status } from '../constants'
+import {
+    PluginFlags as Flag,
+    PersistentPluginFlags,
+    PluginStatus as Status,
+} from '../constants'
 import {
     addPluginApiDecorator,
     decoratePluginApi,
+    pApis,
     pDecoratorsInit,
     pDecoratorsPreInit,
     pDecoratorsStart,
-    pImplicitDeps,
 } from './decorators'
 import {
     computePendingNodes,
@@ -50,9 +58,10 @@ export const InternalPluginFlags = {
      */
     Essential: 1 << 1,
     /**
-     * Marks the plugin as a dependency of all other plugins.
+     * Marks the plugin as an API plugin, which decorates all other plugins.
+     * API plugins themselves won't be decorated by other API plugins unless explicitly declared in dependencies.
      */
-    ImplicitDependency: 1 << 2,
+    API: 1 << 2,
 }
 
 export interface InternalPluginMeta {
@@ -81,15 +90,32 @@ export const pEmitter = new TypedEventEmitter<{
 }>()
 
 export const pList = new Map<PluginManifest['id'], AnyPlugin>()
-export const pMetadata = new WeakMap<AnyPlugin, InternalPluginMeta>()
+const pMetadata = new WeakMap<AnyPlugin, InternalPluginMeta>()
+
+const { flags: PersistedFlags }: PersistedPluginStates = callBridgeMethodSync(
+    'revenge.plugins.states.read',
+    [],
+) ?? {
+    flags: {},
+}
+
+pEmitter.on('flagUpdate', plugin => {
+    PersistedFlags[plugin.manifest.id] = plugin.flags & PersistentPluginFlags
+    callBridgeMethod('revenge.plugins.states.write', [PersistedFlags])
+})
 
 /**
  * Registers a new plugin with the system.
+ *
+ * @param manifest The manifest of the plugin.
+ * @param options The options for the plugin.
+ * @param defflags The default flags for the plugin.
+ * @param iflags The internal flags for the plugin.
  */
 export function registerPlugin<O extends PluginApiExtensionsOptions>(
     manifest: PluginManifest,
     options: PluginOptions<O>,
-    flags: number,
+    defflags: number,
     iflags: number,
 ) {
     // TODO(plugins): verify plugin manifest
@@ -111,6 +137,7 @@ export function registerPlugin<O extends PluginApiExtensionsOptions>(
         stop: () => stopPlugin(plugin),
         api: undefined,
         set flags(flags: number) {
+            if (meta.flags === flags) return
             meta.flags = flags
             pEmitter.emit('flagUpdate', this)
         },
@@ -127,15 +154,15 @@ export function registerPlugin<O extends PluginApiExtensionsOptions>(
         dependents: [],
         handleError: e => handlePluginError(e, plugin),
         options,
-        flags,
+        flags: PersistedFlags[manifest.id] ?? defflags,
     }
 
     pMetadata.set(plugin, meta)
     pList.set(manifest.id, plugin)
 
-    if (iflags & InternalPluginFlags.ImplicitDependency) {
+    if (iflags & InternalPluginFlags.API) {
         pLeafOrSingleNodes.add(plugin)
-        pImplicitDeps.add(plugin)
+        pApis.add(plugin)
     }
     // Only add to pending if the plugin is enabled
     else if (isPluginEnabled(plugin)) pPending.add(plugin)
@@ -149,7 +176,7 @@ export function registerPlugin<O extends PluginApiExtensionsOptions>(
  * Gets dependencies for a plugin.
  */
 export function getPluginDependencies(plugin: AnyPlugin): AnyPlugin[] {
-    const meta = pMetadata.get(plugin)!
+    const meta = getInternalPluginMeta(plugin)!
     if (meta.dependencies) return meta.dependencies
 
     const { dependencies, id } = plugin.manifest
@@ -191,6 +218,10 @@ export function isPluginInternal({ iflags }: InternalPluginMeta): boolean {
     return Boolean(iflags & InternalPluginFlags.Internal)
 }
 
+export function isPluginErrored(plugin: AnyPlugin) {
+    return Boolean(plugin.flags & Flag.Errored)
+}
+
 function guardPluginEnabled(plugin: AnyPlugin) {
     if (!isPluginEnabled(plugin))
         throw new Error(`Plugin "${plugin.manifest.id}" is not enabled`)
@@ -211,19 +242,20 @@ async function handlePluginError(e: unknown, plugin: AnyPlugin) {
     plugin.api?.logger?.error('Plugin encountered an error', e)
     pEmitter.emit('errored', plugin, e)
 
-    if (!isPluginEssential(pMetadata.get(plugin)!)) await plugin.disable()
+    if (!isPluginEssential(getInternalPluginMeta(plugin)!))
+        await plugin.disable()
 }
 
 /**
  * Prepares the plugin API for the preInit lifecycle.
  */
 function tryPreparePluginPreInit(plugin: AnyPlugin) {
-    const meta = pMetadata.get(plugin)!
+    const meta = getInternalPluginMeta(plugin)!
     if (meta.apiLevel >= PluginApiLevel.PreInit) return
 
     // Clear errors from previous runs
     plugin.errors = []
-    plugin.status &= ~Flag.Errored
+    plugin.flags &= ~Flag.Errored
 
     plugin.api = {
         cleanup: (...items) => {
@@ -244,7 +276,7 @@ function tryPreparePluginPreInit(plugin: AnyPlugin) {
  * Prepares the plugin API for the init lifecycle.
  */
 function tryPreparePluginInit(plugin: AnyPlugin) {
-    const meta = pMetadata.get(plugin)!
+    const meta = getInternalPluginMeta(plugin)!
     if (meta.apiLevel >= PluginApiLevel.Init) return
 
     const api = plugin.api as InitPluginApi
@@ -261,7 +293,7 @@ function tryPreparePluginInit(plugin: AnyPlugin) {
  * Prepares the plugin API for the start lifecycle.
  */
 function tryPreparePluginStart(plugin: AnyPlugin) {
-    const meta = pMetadata.get(plugin)!
+    const meta = getInternalPluginMeta(plugin)!
     if (meta.apiLevel >= PluginApiLevel.Start) return
 
     const api = plugin.api as PluginApi
@@ -280,7 +312,7 @@ function tryPreparePluginStart(plugin: AnyPlugin) {
 export async function disablePlugin(plugin: AnyPlugin) {
     guardPluginEnabled(plugin)
 
-    const meta = pMetadata.get(plugin)!
+    const meta = getInternalPluginMeta(plugin)!
 
     if (isPluginEssential(meta))
         throw new Error(
@@ -299,7 +331,6 @@ export async function disablePlugin(plugin: AnyPlugin) {
     if (plugin.status && !(plugin.status & Status.Stopping))
         await stopPlugin(plugin)
 
-    // TODO(plugins): write to storage
     plugin.flags &= ~Flag.Enabled
     pEmitter.emit('disabled', plugin)
 }
@@ -317,9 +348,7 @@ export async function enablePlugin(plugin: AnyPlugin) {
         }),
     )
 
-    // TODO(plugins): write to storage
     plugin.flags |= Flag.Enabled
-
     pEmitter.emit('enabled', plugin)
 }
 
@@ -367,7 +396,7 @@ export async function preInitPlugin(plugin: AnyPlugin) {
     tryPreparePluginPreInit(plugin)
 
     const { lifecycles } = plugin
-    const { promises, handleError } = pMetadata.get(plugin)!
+    const { promises, handleError } = getInternalPluginMeta(plugin)!
 
     try {
         if (!lifecycles.preInit) return
@@ -375,17 +404,21 @@ export async function preInitPlugin(plugin: AnyPlugin) {
         plugin.status |= Status.PreIniting
 
         try {
-            const prom = lifecycles.preInit(plugin.api as PreInitPluginApi)
+            const prom = lifecycles.preInit.apply(plugin, [
+                plugin.api as PreInitPluginApi,
+            ])
             promises.push(prom)
             await prom
         } catch (e) {
             await handleError(e)
         } finally {
-            plugin.status |= Status.PreInited
             plugin.status &= ~Status.PreIniting
         }
     } finally {
-        pEmitter.emit('preInited', plugin)
+        if (!isPluginErrored(plugin)) {
+            plugin.status |= Status.PreInited
+            pEmitter.emit('preInited', plugin)
+        }
     }
 }
 
@@ -399,7 +432,7 @@ export async function initPlugin(plugin: AnyPlugin) {
         manifest: { id },
     } = plugin
 
-    const meta = pMetadata.get(plugin)!
+    const meta = getInternalPluginMeta(plugin)!
 
     if (plugin.status & (Status.Initing | Status.Inited))
         throw new Error(`Plugin init lifecycle for "${id}" is already running`)
@@ -416,17 +449,21 @@ export async function initPlugin(plugin: AnyPlugin) {
         plugin.status |= Status.Initing
 
         try {
-            const prom = lifecycles.init(plugin.api as InitPluginApi)
+            const prom = lifecycles.init.apply(plugin, [
+                plugin.api as InitPluginApi,
+            ])
             promises.push(prom)
             await prom
         } catch (e) {
             await handleError(e)
         } finally {
-            plugin.status |= Status.Inited
             plugin.status &= ~Status.Initing
         }
     } finally {
-        pEmitter.emit('inited', plugin)
+        if (!isPluginErrored(plugin)) {
+            plugin.status |= Status.Inited
+            pEmitter.emit('inited', plugin)
+        }
     }
 }
 
@@ -448,7 +485,7 @@ export async function startPlugin(plugin: AnyPlugin) {
     tryPreparePluginStart(plugin)
 
     const { lifecycles } = plugin
-    const { promises, handleError } = pMetadata.get(plugin)!
+    const { promises, handleError } = getInternalPluginMeta(plugin)!
 
     try {
         if (!lifecycles.start) return
@@ -456,17 +493,21 @@ export async function startPlugin(plugin: AnyPlugin) {
         plugin.status |= Status.Starting
 
         try {
-            const prom = lifecycles.start(plugin.api as PluginApi)
+            const prom = lifecycles.start.apply(plugin, [
+                plugin.api as PluginApi,
+            ])
             promises.push(prom)
             await prom
         } catch (e) {
             await handleError(e)
         } finally {
-            plugin.status |= Status.Started
             plugin.status &= ~Status.Starting
         }
     } finally {
-        pEmitter.emit('started', plugin)
+        if (!isPluginErrored(plugin)) {
+            plugin.status |= Status.Started
+            pEmitter.emit('started', plugin)
+        }
     }
 }
 
@@ -480,7 +521,7 @@ export async function stopPlugin(plugin: AnyPlugin) {
         manifest: { id },
     } = plugin
 
-    const meta = pMetadata.get(plugin)!
+    const meta = getInternalPluginMeta(plugin)!
 
     if (isPluginEssential(meta))
         throw new Error(`Plugin "${id}" is essential and cannot be stopped`)
@@ -494,7 +535,7 @@ export async function stopPlugin(plugin: AnyPlugin) {
     // Wait for in-progress lifecycles to finish or timeout
     if (plugin.status & (Status.PreIniting | Status.Initing | Status.Starting))
         await Promise.race([
-            Promise.all(promises),
+            !isPluginErrored(plugin) && Promise.all(promises),
             sleepReject(
                 MaxWaitTime,
                 'Plugin lifecycles timed out, force stopping',
@@ -513,7 +554,7 @@ export async function stopPlugin(plugin: AnyPlugin) {
     try {
         if (lifecycles.stop)
             await Promise.race([
-                lifecycles.stop(plugin.api as PluginApi),
+                lifecycles.stop.apply(plugin, [plugin.api as PluginApi]),
                 sleepReject(
                     MaxWaitTime,
                     'Plugin stop lifecycle timed out, force stopping',
@@ -556,4 +597,23 @@ async function cleanupPlugin(plugin: AnyPlugin, meta: InternalPluginMeta) {
         }
 
     await Promise.all(proms)
+}
+
+export function getInternalPluginMeta(plugin: AnyPlugin): InternalPluginMeta {
+    return pMetadata.get(plugin)!
+}
+
+declare module '@revenge-mod/modules/native' {
+    interface Methods {
+        'revenge.plugins.states.read': [[], PersistedPluginStates | null]
+        'revenge.plugins.states.write': [[statuses: PersistedPluginFlags], void]
+    }
+}
+
+interface PersistedPluginStates {
+    flags: PersistedPluginFlags
+}
+
+interface PersistedPluginFlags {
+    [id: PluginManifest['id']]: number
 }

@@ -224,3 +224,15 @@ export type OverloadUnionNewableInner<
       : never
 
 export type UnpatchFunction = () => void
+
+export enum HookPriority {
+    LOWEST = -1000,
+    LOW = -500,
+    NORMAL = 0,
+    HIGH = 500,
+    HIGHEST = 1000,
+}
+
+export interface HookOptions {
+    priority?: number
+}

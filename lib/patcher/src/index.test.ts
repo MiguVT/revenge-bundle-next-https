@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test'
-import { after, before, instead } from '.'
+import { after, before, HookPriority, instead } from '.'
 
 describe('Patcher', () => {
     let originalMethod: (...args: any[]) => string
@@ -467,6 +467,199 @@ describe('Patcher', () => {
             const instance = new obj.TestClass('original')
             expect(instance.value).toBe('modified')
             expect(beforeHook).toHaveBeenCalledWith(['modified'])
+        })
+    })
+
+    describe('priority system', () => {
+        test('before hooks should execute in ascending priority order', () => {
+            const order: number[] = []
+
+            before(
+                obj,
+                'method',
+                args => {
+                    order.push(2)
+                    return args
+                },
+                { priority: HookPriority.NORMAL },
+            )
+
+            before(
+                obj,
+                'method',
+                args => {
+                    order.push(1)
+                    return args
+                },
+                { priority: HookPriority.LOWEST },
+            )
+
+            before(
+                obj,
+                'method',
+                args => {
+                    order.push(3)
+                    return args
+                },
+                { priority: HookPriority.HIGHEST },
+            )
+
+            obj.method()
+            expect(order).toEqual([1, 2, 3])
+        })
+
+        test('after hooks should execute in descending priority order', () => {
+            const order: number[] = []
+
+            after(
+                obj,
+                'method',
+                result => {
+                    order.push(2)
+                    return result
+                },
+                { priority: HookPriority.NORMAL },
+            )
+
+            after(
+                obj,
+                'method',
+                result => {
+                    order.push(3)
+                    return result
+                },
+                { priority: HookPriority.LOWEST },
+            )
+
+            after(
+                obj,
+                'method',
+                result => {
+                    order.push(1)
+                    return result
+                },
+                { priority: HookPriority.HIGHEST },
+            )
+
+            obj.method()
+            expect(order).toEqual([1, 2, 3])
+        })
+
+        test('instead hooks should execute highest priority first', () => {
+            const order: number[] = []
+
+            instead(
+                obj,
+                'method',
+                (args, original) => {
+                    order.push(1)
+                    return `1-${original(...args)}`
+                },
+                { priority: HookPriority.LOWEST },
+            )
+
+            instead(
+                obj,
+                'method',
+                (args, original) => {
+                    order.push(2)
+                    return `2-${original(...args)}`
+                },
+                { priority: HookPriority.NORMAL },
+            )
+
+            instead(
+                obj,
+                'method',
+                (args, original) => {
+                    order.push(3)
+                    return `3-${original(...args)}`
+                },
+                { priority: HookPriority.HIGHEST },
+            )
+
+            const result = obj.method()
+            expect(order).toEqual([3, 2, 1])
+            expect(result).toBe('3-2-1-original')
+        })
+
+        test('before hooks with custom priority values', () => {
+            const order: number[] = []
+
+            before(
+                obj,
+                'method',
+                args => {
+                    order.push(2)
+                    return args
+                },
+                { priority: 0 },
+            )
+
+            before(
+                obj,
+                'method',
+                args => {
+                    order.push(1)
+                    return args
+                },
+                { priority: -100 },
+            )
+
+            before(
+                obj,
+                'method',
+                args => {
+                    order.push(3)
+                    return args
+                },
+                { priority: 100 },
+            )
+
+            before(
+                obj,
+                'method',
+                args => {
+                    order.push(4)
+                    return args
+                },
+                { priority: 150 },
+            )
+
+            obj.method()
+            expect(order).toEqual([1, 2, 3, 4])
+        })
+
+        test('hooks without priority should default to 0', () => {
+            const order: number[] = []
+
+            before(
+                obj,
+                'method',
+                args => {
+                    order.push(2)
+                    return args
+                },
+                { priority: -10 },
+            )
+
+            before(obj, 'method', args => {
+                order.push(3)
+                return args
+            })
+
+            before(
+                obj,
+                'method',
+                args => {
+                    order.push(4)
+                    return args
+                },
+                { priority: 10 },
+            )
+
+            obj.method()
+            expect(order).toEqual([2, 3, 4])
         })
     })
 })

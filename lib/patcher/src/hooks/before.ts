@@ -7,6 +7,7 @@ import type { HookNode, PatchedFunctionProxyState } from '../_internal'
 import type {
     BeforeHook,
     FiniteDomain,
+    HookOptions,
     UnknownFunction,
     UnpatchFunction,
 } from '../types'
@@ -62,35 +63,60 @@ function unpatchBefore<T extends UnknownFunction>(
  * @param parent The parent object containing the method to patch.
  * @param key The key of the method to patch.
  * @param hook The hook function to execute before the original method.
+ * @param options Optional configuration including priority.
  *
  * @returns A function to unpatch.
  */
 export function before<
     Parent extends Record<Key, UnknownFunction>,
     Key extends keyof Parent,
->(parent: Parent, key: Key, hook: BeforeHook<Parent[Key]>): UnpatchFunction
+>(
+    parent: Parent,
+    key: Key,
+    hook: BeforeHook<Parent[Key]>,
+    options?: HookOptions,
+): UnpatchFunction
 export function before<Key extends PropertyKey, Value extends UnknownFunction>(
     parent: Record<Key, Value>,
     key: FiniteDomain<Key>,
     hook: BeforeHook<Value>,
+    options?: HookOptions,
 ): UnpatchFunction {
     const target = parent[key]
+    const priority = options?.priority ?? 0
 
     let state = patchedFunctionProxyStates.get(target)
     let hookNode: HookNode<typeof hook>
     if (state?.parent === parent && state.key === key) {
-        const head = state.before
+        let current = state.before
+        let prev: HookNode<typeof hook> | undefined
+
+        while (current && current.priority < priority) {
+            prev = current
+            current = current.next
+        }
+
         hookNode = {
             hook,
-            next: head,
-            prev: undefined,
+            priority,
+            next: current,
+            prev,
             unpatched: false,
         }
-        if (head) head.prev = hookNode
-        state.before = hookNode
+
+        if (prev) {
+            prev.next = hookNode
+        } else {
+            state.before = hookNode
+        }
+
+        if (current) {
+            current.prev = hookNode
+        }
     } else {
         hookNode = {
             hook,
+            priority,
             next: undefined,
             prev: undefined,
             unpatched: false,

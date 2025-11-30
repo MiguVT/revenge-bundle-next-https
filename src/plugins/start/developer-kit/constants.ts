@@ -5,10 +5,14 @@ export const Setting = {
 
     // SUBSETTINGS
 
-    RDTVersion: 'RDTVersion',
+    DTAutoConnect: 'DTAutoConnect',
+    DTConnect: 'DTConnect',
+    DTDisconnect: 'DTDisconnect',
+
     RDTAutoConnect: 'RDTAutoConnect',
     RDTConnect: 'RDTConnect',
     RDTDisconnect: 'RDTDisconnect',
+
     EvalJS: 'EvalJS',
     AssetBrowser: 'AssetBrowser',
     TestErrorBoundary: 'TestErrorBoundary',

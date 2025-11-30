@@ -27,9 +27,6 @@ export let FlashList: typeof import('@shopify/flash-list') = proxify(
                     null,
                 ]),
             ),
-            {
-                uninitialized: true,
-            },
         )
 
         if (module) return (FlashList = module)

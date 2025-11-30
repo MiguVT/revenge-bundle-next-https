@@ -1,8 +1,9 @@
 import { getCurrentStack } from '@revenge-mod/utils/error'
 import { cacheFilterResultForId } from '../caches'
-import { metroRequire } from '../metro/custom'
 import { mInitialized } from '../metro/patches'
+import { metroRequire } from '../metro/runtime'
 import { isModuleExportBad } from '../metro/utils'
+import { FilterFlag } from './filters'
 import type { If } from '@revenge-mod/utils/types'
 import type { Metro } from '../types'
 import type { Filter } from './filters'
@@ -15,7 +16,7 @@ export interface RunFilterOptions {
      */
     skipDefault?: boolean
     /**
-     * Whether to allow initializing modules to check their exports.
+     * Whether to allow initializing modules to confirm their exports.
      *
      * @default true
      */
@@ -71,7 +72,7 @@ export const FilterResultFlagToHumanReadable: Record<FilterResultFlag, string> =
 // If we add more options later on, do NOT forget about
 // adding them here, and passing them in the lookup* functions
 export function runFilter(
-    filter: Filter<any, false>,
+    filter: Filter<{ Result: any; RequiresExports: false; Scopes: any[] }>,
     id: Metro.ModuleID,
 ): FilterResultFlag | undefined
 
@@ -89,7 +90,9 @@ export function runFilter(
     options?: RunFilterOptions,
 ): FilterResultFlag | undefined {
     if (exports === undefined) {
-        if ((filter as Filter<any, false>)(id)) {
+        if (filter.flags & FilterFlag.RequiresExports) return
+
+        if (filter(id)) {
             if (options?.initialize ?? true) {
                 const module = metroRequire(id)
                 // Check if the required module is not blacklisted

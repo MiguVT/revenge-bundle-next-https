@@ -9,9 +9,6 @@ import { proxify } from '@revenge-mod/utils/proxy'
 
 const { loose, relative } = withDependencies
 
-const [, _createClassModuleId] = lookupModule(withName('_createClass'))
-const [, _classCallCheckModuleId] = lookupModule(withName('_classCallCheck'))
-
 export let ReactNavigationNative: typeof import('@react-navigation/native') =
     proxify(
         () => {
@@ -21,14 +18,14 @@ export let ReactNavigationNative: typeof import('@react-navigation/native') =
                         loose([
                             [],
                             loose([
-                                [_createClassModuleId, _classCallCheckModuleId],
+                                [
+                                    withName('_createClass'),
+                                    withName('_classCallCheck'),
+                                ],
                             ]),
                         ]),
                     ),
                 ),
-                {
-                    uninitialized: true,
-                },
             )
 
             if (module) return (ReactNavigationNative = module)
@@ -41,26 +38,17 @@ export let ReactNavigationNative: typeof import('@react-navigation/native') =
 export let ReactNavigationStack: typeof import('@react-navigation/stack') =
     proxify(
         () => {
+            const firstDep = relative.withDependencies(
+                loose([[[]], ReactModuleId, ReactJSXRuntimeModuleId]),
+                1,
+            )
+
             const [module] = lookupModule(
-                withProps<typeof ReactNavigationStack>('StackView').and(
-                    withDependencies(
-                        loose([
-                            relative.withDependencies(
-                                loose([
-                                    [[]],
-                                    ReactModuleId,
-                                    ReactJSXRuntimeModuleId,
-                                ]),
-                                1,
-                            ),
-                            null,
-                            relative(3),
-                        ]),
+                withProps<typeof ReactNavigationStack>('StackView')
+                    .and(withDependencies(loose([firstDep, null, relative(2)])))
+                    .keyAs(
+                        'revenge.externals.ReactNavigation.ReactNavigationStack',
                     ),
-                ),
-                {
-                    uninitialized: true,
-                },
             )
 
             if (module) return (ReactNavigationStack = module)

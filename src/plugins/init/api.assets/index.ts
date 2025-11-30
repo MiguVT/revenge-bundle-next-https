@@ -19,5 +19,5 @@ registerPlugin(
     // biome-ignore format: Don't format this
     InternalPluginFlags.Internal |
     InternalPluginFlags.Essential |
-    InternalPluginFlags.ImplicitDependency,
+    InternalPluginFlags.API,
 )

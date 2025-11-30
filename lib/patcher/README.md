@@ -243,6 +243,76 @@ obj.method(2)
 
 Unpatch functions are safe to call multiple times and won't throw errors.
 
+### Hook priority
+
+All hooks support an optional priority parameter to control execution order. Higher priority hooks execute before lower priority hooks.
+
+```js
+import { before, after, instead, HookPriority } from '@revenge-mod/patcher'
+
+const obj = {
+    method: (a) => a
+}
+
+// Before hooks execute in ascending priority order (lowest to highest)
+before(obj, 'method', (args) => {
+    console.log('Low priority before hook')
+    return args
+}, { priority: HookPriority.LOW })
+
+before(obj, 'method', (args) => {
+    console.log('High priority before hook')
+    return args
+}, { priority: HookPriority.HIGH })
+
+obj.method(1)
+// CONSOLE OUTPUT:
+// Low priority before hook
+// High priority before hook
+
+// After hooks execute in descending priority order (highest to lowest)
+after(obj, 'method', (result) => {
+    console.log('High priority after hook')
+    return result
+}, { priority: HookPriority.HIGH })
+
+after(obj, 'method', (result) => {
+    console.log('Low priority after hook')
+    return result
+}, { priority: HookPriority.LOW })
+
+obj.method(1)
+// CONSOLE OUTPUT:
+// High priority after hook
+// Low priority after hook
+
+// Instead hooks execute in descending priority order (highest to lowest)
+instead(obj, 'method', function (args, original) {
+    console.log('High priority instead hook')
+    return original.apply(this, args)
+}, { priority: HookPriority.HIGH })
+
+instead(obj, 'method', function (args, original) {
+    console.log('Low priority instead hook')
+    return original.apply(this, args)
+}, { priority: HookPriority.LOW })
+
+obj.method(1)
+// CONSOLE OUTPUT:
+// High priority instead hook
+// Low priority instead hook
+```
+
+Priority constants:
+
+- `HookPriority.HIGHEST` (1000)
+- `HookPriority.HIGH` (500)
+- `HookPriority.NORMAL` (0) - default
+- `HookPriority.LOW` (-500)
+- `HookPriority.LOWEST` (-1000)
+
+You can also use custom numeric values for fine-grained control.
+
 ### Constructor patching
 
 You can also patch constructor functions:

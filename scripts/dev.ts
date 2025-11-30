@@ -55,8 +55,31 @@ const server = Bun.serve({
             )
 
             const file = Bun.file('./dist/revenge.bundle')
-            if (await file.exists()) return new Response(file)
-            else throw new Error('Could not serve the bundle! No file found.')
+
+            if (await file.exists()) {
+                const hash = Bun.hash
+                    .crc32(await file.arrayBuffer())
+                    .toString(16)
+
+                if (req.headers.get('If-None-Match') === hash) {
+                    console.debug(
+                        chalk.gray(
+                            '\u{1F4BE} ETag matched, responding with 304',
+                        ),
+                    )
+
+                    return new Response(null, {
+                        status: 304,
+                    })
+                }
+
+                return new Response(file, {
+                    status: 200,
+                    headers: {
+                        ETag: hash,
+                    },
+                })
+            } else throw new Error('Could not serve the bundle! No file found.')
         } catch (e) {
             console.error(e)
             throw new Error('Build failed. Check console for details.')

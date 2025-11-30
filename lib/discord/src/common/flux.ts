@@ -14,7 +14,4 @@ export const [Dispatcher, DispatcherModuleId] = lookupModule(
     withProps<DiscordModules.Flux.Dispatcher>('_interceptors').and(
         withDependencies([relative(1), null, null, null, null, 2]),
     ),
-    {
-        uninitialized: true,
-    },
 ) as [DiscordModules.Flux.Dispatcher, Metro.ModuleID]

@@ -12,10 +12,10 @@ const RDTAutoConnectSetting: SettingsItem = {
         'Automatically connect to React DevTools during startup.',
     usePredicate: () => RDTContext.active,
     useValue: () =>
-        api.storage.use(s => s.devtools?.autoConnect !== undefined)!.devtools
-            .autoConnect,
+        api.storage.use(s => s.reactDevTools?.autoConnect !== undefined)!
+            .reactDevTools.autoConnect,
     onValueChange: v => {
-        api.storage.set({ devtools: { autoConnect: v } })
+        api.storage.set({ reactDevTools: { autoConnect: v } })
     },
     type: 'toggle',
 }

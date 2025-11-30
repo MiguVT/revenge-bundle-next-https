@@ -8,13 +8,14 @@ import { withName } from '@revenge-mod/modules/finders/filters'
 import { instead } from '@revenge-mod/patcher'
 import { InternalPluginFlags, registerPlugin } from '@revenge-mod/plugins/_'
 import { PluginFlags } from '@revenge-mod/plugins/constants'
+import { React } from '@revenge-mod/react'
+import { asap, noop } from '@revenge-mod/utils/callback'
+import { getCurrentStack } from '@revenge-mod/utils/error'
+import { useReRender } from '@revenge-mod/utils/react'
 import { useEffect } from 'react'
 import type { FC } from 'react'
 
-import './register-routes'
-import { React } from '@revenge-mod/react'
-import { noop } from '@revenge-mod/utils/callback'
-import { useReRender } from '@revenge-mod/utils/react'
+let DEBUG_patchedNavigator = false
 
 const pluginSettings = registerPlugin(
     {
@@ -26,12 +27,22 @@ const pluginSettings = registerPlugin(
     },
     {
         start() {
+            // @as-require
+            import('./plugins')
+
             onSettingsModulesLoaded(() => {
-                require('./register')
+                // @as-require
+                import('./register')
+
+                // Debug warnings
+                asap(() => {
+                    if (__DEV__ && !DEBUG_patchedNavigator)
+                        DEBUG_warnUnpatchedNavigator()
+                })
             })
 
             waitForModuleWithImportedPath(
-                'modules/main_tabs_v2/native/settings/SettingsNavigator.tsx',
+                'modules/user_settings/native/core/SettingsNavigator.tsx',
                 exports => {
                     patchSettingsNavigator(exports)
                 },
@@ -76,10 +87,12 @@ function patchSettingsNavigator(exports: any) {
             return Reflect.apply(orig, React, args)
         })
 
-        const fiber = Reflect.apply(orig, undefined, args)
+        const el = Reflect.apply(orig, undefined, args)
         unpatchMemo()
-        return fiber
+        return el
     })
+
+    DEBUG_patchedNavigator = true
 }
 
 let sectionsInst: object | undefined
@@ -112,7 +125,8 @@ function patchSettingsOverviewScreen(exports: any) {
             const unpatchMemo = instead(React, 'useMemo', (args, orig) => {
                 if (sRefresher.overviewScreen) args[1] = undefined
 
-                let sections = Reflect.apply(orig, React, args)
+                const node = Reflect.apply(orig, React, args)
+                const sections = node.sections
 
                 // Add our custom sections here, and only do this per instance!
                 if (sectionsInst !== sections) {
@@ -125,18 +139,28 @@ function patchSettingsOverviewScreen(exports: any) {
                 }
 
                 if (sRefresher.overviewScreen) {
-                    sections = sectionsInst = [...sections]
+                    node.sections = sectionsInst = [...sections]
                     sRefresher.overviewScreen = false
                 }
 
-                return sections
+                return node
             })
 
-            const fiber = Reflect.apply(orig, undefined, args)
+            const el = Reflect.apply(orig, undefined, args)
             unpatchMemo()
-            return fiber
+            return el
         },
     )
 }
 
 export default pluginSettings
+
+/**
+ * Warns the developer that SettingsNavigator was not patched.
+ */
+function DEBUG_warnUnpatchedNavigator() {
+    nativeLoggingHook(
+        `\u001b[31mSettingsNavigator was not patched\n${getCurrentStack()}\u001b[0m`,
+        2,
+    )
+}

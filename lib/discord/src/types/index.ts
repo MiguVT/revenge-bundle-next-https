@@ -309,6 +309,8 @@ export namespace DiscordModules {
 
         export interface StackProps extends ViewProps {
             spacing?: number
+            align?: ViewStyle['alignItems']
+            justify?: ViewStyle['justifyContent']
             direction?: 'vertical' | 'horizontal'
         }
 
@@ -457,7 +459,7 @@ export namespace DiscordModules {
 
         export interface TableRowProps {
             label: string
-            subLabel?: string
+            subLabel?: ReactNode
             icon?: ReactNode
             trailing?: ReactNode
             arrow?: boolean
@@ -476,6 +478,7 @@ export namespace DiscordModules {
             Arrow: FC
             Icon: TableRowIcon
             Group: TableRowGroup
+            TrailingText: TableRowTrailingText
         }
 
         export interface TableSwitchRowProps
@@ -615,12 +618,18 @@ export namespace DiscordModules {
             }
 
             export interface SettingsListProps {
-                ListHeaderComponent?: ComponentType
-                sections: Array<{
-                    label?: string | ReactNode
-                    settings: string[]
-                    subLabel?: string | ReactNode
-                }>
+                containerStyle?: StyleProp<ViewStyle>
+                initialSetting?: string
+                node: {
+                    type: 'list'
+                    ListHeaderComponent?: ComponentType
+                    ListFooterComponent?: ComponentType
+                    sections: Array<{
+                        label?: string | ReactNode
+                        settings: string[]
+                        subLabel?: string | ReactNode
+                    }>
+                }
             }
 
             export type SettingsList = FC<SettingsListProps>
@@ -645,6 +654,7 @@ export namespace DiscordModules {
 
             export interface PressableSettingsItem extends BaseSettingsItem {
                 type: 'pressable'
+                withArrow?: boolean
                 onPress?: () => void
             }
 

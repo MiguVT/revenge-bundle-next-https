@@ -32,6 +32,7 @@ export interface HookNode<Hook extends UnknownFunction = UnknownFunction> {
     unpatched: boolean
     /** Can be undefined only in instances that are not in a hook node list. */
     hook: Hook | undefined
+    priority: number
     prev: HookNode<Hook> | undefined
     next: HookNode<Hook> | undefined
 }
@@ -40,6 +41,7 @@ export interface InsteadHookNode<T extends UnknownFunction = UnknownFunction>
     extends HookNode<InsteadHook<T>>,
         FunctionProxyState<T> {
     hook: InsteadHook<T> | undefined
+    priority: number
     prev: InsteadHookNode<T> | undefined
     next: InsteadHookNode<T> | undefined
 }

@@ -1,5 +1,5 @@
 export function getErrorStack(e: unknown) {
-    return e instanceof Error ? e.stack : String(e)
+    return e instanceof Error ? (e.stack ?? String(e)) : String(e)
 }
 
 export function getCurrentStack() {

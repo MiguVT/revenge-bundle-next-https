@@ -5,33 +5,26 @@ import {
     lookupModuleWithImportedPath,
 } from './lookup'
 import { waitForModules, waitForModuleWithImportedPath } from './wait'
-import type { If } from '@revenge-mod/utils/types'
-import type { MaybeDefaultExportMatched, Metro } from '../types'
-import type { RunFilterReturnExportsOptions } from './_internal'
+import type { Metro } from '../types'
 import type { Filter, FilterResult } from './filters'
 import type { LookupModulesOptions } from './lookup'
-import type { WaitForModulesOptions } from './wait'
+import type { WaitForModulesOptions, WaitForModulesResult } from './wait'
 
-export type GetModulesOptions<
-    ReturnNamespace extends boolean = boolean,
-    Uninitialized extends boolean = boolean,
-    All extends boolean = boolean,
-> = WaitForModulesOptions<ReturnNamespace> &
-    LookupModulesOptions<ReturnNamespace, Uninitialized, All, true> & {
-        /**
-         * The maximum number of modules to get.
-         *
-         * @default 1
-         */
-        max?: number
-    }
+export type GetModulesOptions<ReturnNamespace extends boolean = boolean> =
+    WaitForModulesOptions<ReturnNamespace> &
+        LookupModulesOptions<ReturnNamespace, true> & {
+            /**
+             * The maximum number of modules to get.
+             *
+             * @default 1
+             */
+            max?: number
+        }
 
 export type GetModulesResult<
     F extends Filter,
     O extends GetModulesOptions,
-> = O extends RunFilterReturnExportsOptions<true>
-    ? MaybeDefaultExportMatched<FilterResult<F>>
-    : FilterResult<F>
+> = WaitForModulesResult<F, O>
 
 export type GetModulesCallback<T> = (exports: T, id: Metro.ModuleID) => any
 
@@ -67,14 +60,9 @@ export function getModules<F extends Filter>(
     callback: GetModulesCallback<FilterResult<F>>,
 ): GetModulesUnsubscribeFunction
 
-export function getModules<
-    F extends Filter,
-    const O extends F extends Filter<any, infer RE>
-        ? If<RE, GetModulesOptions<boolean, boolean, false>, GetModulesOptions>
-        : never,
->(
+export function getModules<F extends Filter, const O extends GetModulesOptions>(
     filter: F,
-    callback: GetModulesCallback<FilterResult<F>>,
+    callback: GetModulesCallback<GetModulesResult<F, O>>,
     options: O,
 ): GetModulesUnsubscribeFunction
 

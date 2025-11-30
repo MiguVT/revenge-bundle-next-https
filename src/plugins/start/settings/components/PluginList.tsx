@@ -7,7 +7,7 @@ import {
     PLUGIN_CARD_ESTIMATED_SIZE,
     PluginCard,
 } from './PluginCard'
-import { resetTooltips } from './TooltipProvider'
+import { useResetTooltips } from './TooltipProvider'
 import type { AnyPlugin, InternalPluginMeta } from '@revenge-mod/plugins/_'
 
 const { Text } = Design
@@ -15,6 +15,7 @@ const { Text } = Design
 export function PluginFlashList({ plugins }: { plugins: AnyPlugin[] }) {
     const { width, height } = useWindowDimensions()
     const actualWidth = width - styles.pagePadding.paddingHorizontal * 2
+    const resetTooltips = useResetTooltips()
 
     return (
         <FlashList
@@ -51,6 +52,7 @@ export function InstalledPluginMasonryFlashList({
     const { width, height } = useWindowDimensions()
     const actualWidth = width - styles.pagePadding.paddingHorizontal * 2
     const numColumns = Math.floor(actualWidth / 448) || 1
+    const resetTooltips = useResetTooltips()
 
     return (
         <MasonryFlashList

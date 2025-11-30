@@ -1,20 +1,22 @@
-/*
-    Only one tooltip can be visible at a time, so we use a global state to control the visibility of the tooltip.
-    Why? Because we don't want to run useTooltip on every single plugin card. This is ugly, but it works.
-*/
-
 import { Design } from '@revenge-mod/discord/design'
-import { useEffect, useState } from 'react'
+import { createContext, useContext, useRef, useState } from 'react'
 import { useClickOutside } from 'react-native-click-outside'
 import type { RefObject } from 'react'
 import type { View } from 'react-native'
 
 const { useTooltip } = Design
 
-export let setEnablePluginTooltipVisible: ((v: boolean) => void) | undefined
-export const enableTooltipTarget: RefObject<View | null> = {
-    current: null,
+interface TooltipContextValue {
+    targetRef: RefObject<View | null>
+    setVisible: (visible: boolean) => void
 }
+
+const EnablePluginTooltipContext = createContext<TooltipContextValue | null>(
+    null,
+)
+const EssentialPluginTooltipContext = createContext<TooltipContextValue | null>(
+    null,
+)
 
 export function EnablePluginTooltipProvider({
     children,
@@ -22,27 +24,19 @@ export function EnablePluginTooltipProvider({
     children: React.ReactNode
 }) {
     const [visible, setVisible] = useState(false)
+    const targetRef = useRef<View | null>(null)
 
-    useEffect(() => {
-        setEnablePluginTooltipVisible = setVisible
-        return () => {
-            enableTooltipTarget.current = null
-            setEnablePluginTooltipVisible = undefined
-        }
-    }, [])
-
-    useTooltip(enableTooltipTarget, {
+    useTooltip(targetRef, {
         label: 'Plugin must be enabled first',
         position: 'top',
         visible,
     })
 
-    return children
-}
-
-export let setEssentialPluginTooltipVisible: ((v: boolean) => void) | undefined
-export const essentialTooltipTarget: RefObject<View | null> = {
-    current: null,
+    return (
+        <EnablePluginTooltipContext.Provider value={{ targetRef, setVisible }}>
+            {children}
+        </EnablePluginTooltipContext.Provider>
+    )
 }
 
 export function EssentialPluginTooltipProvider({
@@ -51,36 +45,64 @@ export function EssentialPluginTooltipProvider({
     children: React.ReactNode
 }) {
     const [visible, setVisible] = useState(false)
+    const targetRef = useRef<View | null>(null)
 
-    useEffect(() => {
-        setEssentialPluginTooltipVisible = setVisible
-        return () => {
-            essentialTooltipTarget.current = null
-            setEssentialPluginTooltipVisible = undefined
-        }
-    }, [])
-
-    useTooltip(essentialTooltipTarget, {
+    useTooltip(targetRef, {
         label: 'Plugin needed for Revenge to function properly',
         position: 'top',
         visible,
     })
 
-    return children
+    return (
+        <EssentialPluginTooltipContext.Provider
+            value={{ targetRef, setVisible }}
+        >
+            {children}
+        </EssentialPluginTooltipContext.Provider>
+    )
 }
 
-export function resetTooltips() {
-    setEnablePluginTooltipVisible?.(false)
-    setEssentialPluginTooltipVisible?.(false)
+export function useEnablePluginTooltip() {
+    const context = useContext(EnablePluginTooltipContext)
+    if (!context) {
+        throw new Error(
+            'useEnablePluginTooltip must be used within EnablePluginTooltipProvider',
+        )
+    }
+    return context
+}
+
+export function useEssentialPluginTooltip() {
+    const context = useContext(EssentialPluginTooltipContext)
+    if (!context) {
+        throw new Error(
+            'useEssentialPluginTooltip must be used within EssentialPluginTooltipProvider',
+        )
+    }
+    return context
+}
+
+export function useResetTooltips() {
+    const enableTooltip = useContext(EnablePluginTooltipContext)
+    const essentialTooltip = useContext(EssentialPluginTooltipContext)
+
+    return () => {
+        enableTooltip?.setVisible(false)
+        essentialTooltip?.setVisible(false)
+    }
 }
 
 export function useClickOutsideTooltip(
-    target: RefObject<View | null>,
+    contextHook: () => TooltipContextValue,
     onClickOutside: () => void,
 ) {
+    const { targetRef, setVisible } = contextHook()
+
     const ref = useClickOutside<View>(() => {
-        resetTooltips()
-        if (target.current === ref.current) onClickOutside()
+        setVisible(false)
+        if (targetRef.current === ref.current) {
+            onClickOutside()
+        }
     })
 
     return ref

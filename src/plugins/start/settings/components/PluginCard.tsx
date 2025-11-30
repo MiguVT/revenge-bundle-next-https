@@ -1,33 +1,19 @@
-import { useNavigation } from '@react-navigation/native'
 import { getAssetIdByName } from '@revenge-mod/assets'
 import { styles } from '@revenge-mod/components/_'
 import FormSwitch from '@revenge-mod/components/FormSwitch'
-import { AlertActionCreators } from '@revenge-mod/discord/actions'
 import { Tokens } from '@revenge-mod/discord/common'
 import { Design } from '@revenge-mod/discord/design'
-import {
-    enablePlugin,
-    getPluginDependencies,
-    isPluginEnabled,
-    isPluginEssential,
-    runPluginLate,
-} from '@revenge-mod/plugins/_'
+import { isPluginEssential } from '@revenge-mod/plugins/_'
 import { memo } from 'react'
+import { Image, Pressable } from 'react-native'
+import { handleDisablePlugin, handleEnablePlugin } from '../utils/actions'
+import { openPluginSettings } from '../utils/alerts'
+import { showPluginOptionsActionSheet } from '../utils/sheets'
+import { usePluginEnabled } from './PluginStateProvider'
 import {
-    Image,
-    PixelRatio,
-    Pressable,
-    useWindowDimensions,
-    View,
-} from 'react-native'
-import { PluginFlashList } from './PluginList'
-import PluginStatesProvider, { usePluginEnabled } from './PluginStateProvider'
-import {
-    enableTooltipTarget,
-    essentialTooltipTarget,
-    setEnablePluginTooltipVisible,
-    setEssentialPluginTooltipVisible,
     useClickOutsideTooltip,
+    useEnablePluginTooltip,
+    useEssentialPluginTooltip,
 } from './TooltipProvider'
 import type { AnyPlugin, InternalPluginMeta } from '@revenge-mod/plugins/_'
 
@@ -35,6 +21,7 @@ const { Card, Text, Stack, IconButton, createStyles } = Design
 
 const PuzzlePieceIcon = getAssetIdByName('PuzzlePieceIcon', 'png')!
 const SettingsIcon = getAssetIdByName('SettingsIcon', 'png')!
+const MoreVerticalIcon = getAssetIdByName('MoreVerticalIcon', 'png')!
 
 export const PLUGIN_CARD_ESTIMATED_SIZE = 116
 
@@ -66,6 +53,37 @@ export const PluginCard = memo(function PluginCard({
                 rowEnd && styles_.rowEnd,
             ]}
         >
+            <PluginInfo
+                name={name}
+                description={description}
+                author={author}
+                icon={icon}
+                actions={actions}
+                aligned
+            />
+        </Card>
+    )
+})
+
+export const PluginInfo = memo(function PluginInfo({
+    name,
+    description,
+    author,
+    icon,
+    actions,
+    aligned,
+}: {
+    name: string
+    description: string
+    author: string
+    icon?: string
+    actions?: React.ReactNode
+    aligned?: boolean
+}) {
+    const styles_ = usePluginCardStyles()
+
+    return (
+        <Stack>
             <Stack
                 direction="horizontal"
                 style={[styles.grow, styles_.topContainer]}
@@ -89,7 +107,10 @@ export const PluginCard = memo(function PluginCard({
                 </Stack>
                 {actions}
             </Stack>
-            <Stack spacing={4} style={[styles_.alignedContainer, styles.grow]}>
+            <Stack
+                spacing={4}
+                style={[aligned && styles_.alignedContainer, styles.grow]}
+            >
                 <Text
                     color="text-muted"
                     style={styles.grow}
@@ -101,7 +122,7 @@ export const PluginCard = memo(function PluginCard({
                     {description}
                 </Text>
             </Stack>
-        </Card>
+        </Stack>
     )
 })
 
@@ -116,24 +137,23 @@ export const InstalledPluginCard = memo(function InstalledPluginCard({
     rowEnd?: boolean
     columnEnd?: boolean
 }) {
-    const navigation = useNavigation()
     const enabled = usePluginEnabled(plugin)
 
     const {
         manifest: { name, description, author, icon },
     } = plugin
 
-    const dependencies = getPluginDependencies(plugin)
     const essential = isPluginEssential(meta)
-    const { dependents } = meta
 
-    const settingsRef = useClickOutsideTooltip(enableTooltipTarget, () => {
-        setEnablePluginTooltipVisible?.(false)
-    })
+    const enableTooltip = useEnablePluginTooltip()
+    const essentialTooltip = useEssentialPluginTooltip()
 
-    const switchRef = useClickOutsideTooltip(essentialTooltipTarget, () => {
-        setEssentialPluginTooltipVisible?.(false)
-    })
+    const settingsRef = useClickOutsideTooltip(useEnablePluginTooltip, () => {})
+
+    const switchRef = useClickOutsideTooltip(
+        useEssentialPluginTooltip,
+        () => {},
+    )
 
     return (
         <PluginCard
@@ -145,18 +165,23 @@ export const InstalledPluginCard = memo(function InstalledPluginCard({
             columnEnd={columnEnd}
             actions={
                 <>
+                    <IconButton
+                        size="sm"
+                        variant="secondary"
+                        icon={MoreVerticalIcon}
+                        onPress={() => {
+                            showPluginOptionsActionSheet(plugin)
+                        }}
+                    />
                     {plugin.SettingsComponent && (
                         <Pressable
-                            onPress={e => {
-                                if (enabled) return
-
-                                e.stopPropagation()
-
-                                requestAnimationFrame(() => {
-                                    enableTooltipTarget.current =
-                                        settingsRef.current
-                                    setEnablePluginTooltipVisible!(true)
-                                })
+                            onPress={() => {
+                                if (!enabled)
+                                    requestAnimationFrame(() => {
+                                        enableTooltip.targetRef.current =
+                                            settingsRef.current
+                                        enableTooltip.setVisible(true)
+                                    })
                             }}
                         >
                             <IconButton
@@ -165,41 +190,29 @@ export const InstalledPluginCard = memo(function InstalledPluginCard({
                                 variant="secondary"
                                 icon={SettingsIcon}
                                 onPress={() => {
-                                    navigation.navigate(plugin.manifest.id)
+                                    openPluginSettings(plugin)
                                 }}
                                 disabled={!enabled}
                             />
                         </Pressable>
                     )}
                     <Pressable
-                        onPress={e => {
-                            if (essential) {
-                                e.stopPropagation()
-
+                        onPress={() => {
+                            if (essential)
                                 requestAnimationFrame(() => {
-                                    essentialTooltipTarget.current =
+                                    essentialTooltip.targetRef.current =
                                         switchRef.current
-                                    setEssentialPluginTooltipVisible!(true)
+                                    essentialTooltip.setVisible(true)
                                 })
-                            }
                         }}
                         ref={switchRef}
                     >
                         <FormSwitch
-                            // Only FormSwitch listens for props changes, so we use a unique key just for this one.
                             key={plugin.manifest.id}
                             disabled={essential}
                             onValueChange={enabled => {
-                                if (enabled)
-                                    return handleEnablePlugin(
-                                        plugin,
-                                        dependencies,
-                                    )
-                                else
-                                    return handleDisablePlugin(
-                                        plugin,
-                                        dependents,
-                                    )
+                                if (enabled) handleEnablePlugin(plugin)
+                                else handleDisablePlugin(plugin)
                             }}
                             value={enabled}
                         />
@@ -209,162 +222,6 @@ export const InstalledPluginCard = memo(function InstalledPluginCard({
         />
     )
 })
-
-async function handleEnablePlugin(
-    plugin: AnyPlugin,
-    dependencies: AnyPlugin[],
-) {
-    const disabledDeps = dependencies.filter(dep => !isPluginEnabled(dep))
-
-    async function action() {
-        await enablePlugin(plugin)
-        await runPluginLate(plugin)
-    }
-
-    if (disabledDeps.length)
-        AlertActionCreators.openAlert(
-            'plugin-has-dependencies',
-            <PluginStatesProvider>
-                <PluginHasDependenciesAlert
-                    plugin={plugin}
-                    dependencies={disabledDeps}
-                    action={action}
-                />
-            </PluginStatesProvider>,
-        )
-    else await action()
-}
-
-async function handleDisablePlugin(plugin: AnyPlugin, dependents: AnyPlugin[]) {
-    const action = plugin.disable
-
-    const enabledDeps = dependents.filter(isPluginEnabled)
-
-    if (enabledDeps.length)
-        AlertActionCreators.openAlert(
-            'plugin-has-dependents',
-            <PluginStatesProvider>
-                <PluginHasDependentsAlert
-                    plugin={plugin}
-                    dependents={enabledDeps}
-                    action={action}
-                />
-            </PluginStatesProvider>,
-        )
-    else await action()
-}
-
-function PluginHasDependenciesAlert({
-    plugin,
-    dependencies,
-    action,
-}: {
-    plugin: AnyPlugin
-    dependencies: AnyPlugin[]
-    action: () => Promise<void>
-}) {
-    const { height: windowHeight } = useWindowDimensions()
-    const maxHeight = PixelRatio.get() * windowHeight * 0.35 - 64
-
-    return (
-        <Design.AlertModal
-            title="Plugin has dependencies"
-            content={
-                <Text color="header-secondary">
-                    Plugin{' '}
-                    <Text variant="text-md/semibold" color="text-normal">
-                        {plugin.manifest.name}
-                    </Text>{' '}
-                    depends on other plugins to function.
-                    {'\n'}
-                    Enabling it will also enable the following plugins:
-                </Text>
-            }
-            extraContent={
-                <View
-                    style={{
-                        height: Math.min(
-                            PLUGIN_CARD_ESTIMATED_SIZE * dependencies.length,
-                            maxHeight,
-                        ),
-                        maxHeight,
-                    }}
-                >
-                    <PluginFlashList plugins={dependencies} />
-                </View>
-            }
-            actions={
-                <>
-                    <Design.AlertActionButton
-                        onPress={action}
-                        text="Enable all"
-                        variant="primary"
-                    />
-                    <Design.AlertActionButton
-                        text="Cancel"
-                        variant="secondary"
-                    />
-                </>
-            }
-        />
-    )
-}
-
-function PluginHasDependentsAlert({
-    plugin,
-    dependents,
-    action,
-}: {
-    plugin: AnyPlugin
-    dependents: AnyPlugin[]
-    action: () => Promise<void>
-}) {
-    const { height: windowHeight } = useWindowDimensions()
-    const maxHeight = PixelRatio.get() * windowHeight * 0.35 - 64
-
-    return (
-        <Design.AlertModal
-            title="Plugin has dependents"
-            content={
-                <Text color="header-secondary">
-                    Other plugins depend on{' '}
-                    <Text variant="text-md/semibold" color="text-normal">
-                        {plugin.manifest.name}
-                    </Text>{' '}
-                    to function.
-                    {'\n'}
-                    Disabling it will also disable the following plugins:
-                </Text>
-            }
-            extraContent={
-                <View
-                    style={{
-                        height: Math.min(
-                            PLUGIN_CARD_ESTIMATED_SIZE * dependents.length,
-                            maxHeight,
-                        ),
-                        maxHeight,
-                    }}
-                >
-                    <PluginFlashList plugins={dependents} />
-                </View>
-            }
-            actions={
-                <>
-                    <Design.AlertActionButton
-                        text="Disable all"
-                        variant="destructive"
-                        onPress={action}
-                    />
-                    <Design.AlertActionButton
-                        text="Cancel"
-                        variant="secondary"
-                    />
-                </>
-            }
-        />
-    )
-}
 
 const usePluginCardStyles = createStyles({
     icon: {

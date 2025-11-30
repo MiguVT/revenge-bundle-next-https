@@ -1,3 +1,4 @@
+import { getCurrentStack } from './error'
 import type { AnyObject } from './types'
 
 /**
@@ -7,6 +8,40 @@ import type { AnyObject } from './types'
  */
 export function isObject(val: any): val is AnyObject {
     return typeof val === 'object' && val !== null && !Array.isArray(val)
+}
+
+/**
+ * Clone an object deeply.
+ *
+ * @param source The source object to clone.
+ */
+export function cloneDeep<T>(source: T, cache = new WeakMap()): T {
+    if (source === null || typeof source !== 'object') return source
+
+    // Circular reference (use existing cloned object)
+    if (cache.has(source)) return cache.get(source)
+
+    const isArray = Array.isArray(source)
+    const clone = (isArray ? [] : {}) as T
+    cache.set(source, clone)
+
+    if (isArray) {
+        const sourceArray = source as any[]
+        const cloneArray = clone as any[]
+        for (let i = 0; i < sourceArray.length; i++)
+            cloneArray[i] = cloneDeep(sourceArray[i], cache)
+    } else {
+        const sourceObj = source as AnyObject
+        const cloneObj = clone as AnyObject
+
+        const keys = Object.keys(sourceObj)
+        for (let i = 0; i < keys.length; i++) {
+            const key = keys[i]
+            cloneObj[key] = cloneDeep(sourceObj[key], cache)
+        }
+    }
+
+    return clone
 }
 
 /**
@@ -73,6 +108,16 @@ function lazyPropDesc<T extends object, K extends keyof T>(
     key: K,
     loader: () => T[K],
 ): PropertyDescriptor {
+    if (__BUILD_FLAG_DEBUG_LAZY_VALUES__) {
+        const value = loader()
+        if (value == null) DEBUG_warnNullishLazyValue(key)
+
+        return {
+            configurable: true,
+            value,
+        }
+    }
+
     return {
         configurable: true,
         get(this: T) {
@@ -80,4 +125,11 @@ function lazyPropDesc<T extends object, K extends keyof T>(
             return (this[key] = loader())
         },
     }
+}
+
+function DEBUG_warnNullishLazyValue(key: PropertyKey) {
+    nativeLoggingHook(
+        `\u001b[33mLazy property ${String(key)} is being initialized to a nullish value:\n${getCurrentStack()}\u001b[0m`,
+        2,
+    )
 }

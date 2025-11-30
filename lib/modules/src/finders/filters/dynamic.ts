@@ -1,13 +1,22 @@
 import { getCurrentStack } from '@revenge-mod/utils/error'
-import { getModuleDependencies } from '../../metro/utils'
-import { FilterFlag } from './constants'
+import {
+    getInitializedModuleExports,
+    getModuleDependencies,
+} from '../../metro/utils'
+import { runFilter } from '../_internal'
+import { FilterFlag, FilterScopes } from './constants'
 import { createFilterGenerator } from './utils'
 import type { Metro } from '../../types'
 import type { Filter, FilterGenerator } from './utils'
 
 export interface ComparableDependencyMap
     extends Array<
-        Metro.ModuleID | number | null | undefined | ComparableDependencyMap
+        | Metro.ModuleID
+        | number
+        | null
+        | undefined
+        | ComparableDependencyMap
+        | Filter
     > {
     l?: boolean
     r?: number
@@ -46,6 +55,17 @@ const __DEBUG_WARNED_BAD_BY_DEPENDENCIES_FILTERS__ =
  * // Loose dependencies
  * // Module having these dependencies: [4, ...], [4, ..., ...], [4, ..., ..., ...], etc. would match:
  * const [SomeOtherModule] = lookupModule(withDependencies(loose([4])))
+ *
+ * // Using filters as dependencies
+ * // Match modules with specific exports in their dependencies
+ * const [Module] = lookupModule(withDependencies([
+ *   withProps('open'), // first dependency must have an 'open' property
+ *   withName('MyComponent'), // second dependency must have name === 'MyComponent'
+ *   69, // third dependency must be module ID 69
+ *   null, // fourth dependency can be anything
+ *   420, // fifth dependency must be module ID 420
+ *   2 // sixth dependency must be module ID 2
+ * ]))
  * ```
  *
  * @example With filter helpers (preferred)
@@ -62,13 +82,21 @@ export const withDependencies = createFilterGenerator<
     ([deps], id) => depCompare(getModuleDependencies(id)!, deps, id, id),
     deps => `revenge.deps(${depGenFilterKey(deps)})`,
     FilterFlag.Dynamic,
+    FilterScopes.Uninitialized | FilterScopes.Initialized,
 ) as WithDependencies
 
 withDependencies.loose = loose
 withDependencies.relative = relative
 
 type WithDependencies = FilterGenerator<
-    <T>(deps: ComparableDependencyMap) => Filter<T, false>
+    <T>(deps: ComparableDependencyMap) => Filter<{
+        Result: T
+        RequiresExports: false
+        Scopes: [
+            typeof FilterScopes.Uninitialized,
+            typeof FilterScopes.Initialized,
+        ]
+    }>
 > & {
     loose: typeof loose
     relative: typeof relative
@@ -180,17 +208,32 @@ function depCompare(
 
         const id = a[i]
 
-        // Check if it's an array (typeof is faster than Array.isArray)
-        if (typeof compare === 'object') {
-            // relative.withDependencies?
-            if (compare.r && !depShallowCompare(compare.r, id, root, parent))
-                return false
+        switch (typeof compare) {
+            case 'function': {
+                const filter = compare
+                if (!runFilter(filter, id, getInitializedModuleExports(id)))
+                    return false
 
-            if (depCompare(getModuleDependencies(id)!, compare, root, id))
                 continue
-        } else if (depShallowCompare(compare, id, root, parent)) continue
+            }
+            case 'object': {
+                const nested = compare as ComparableDependencyMap
 
-        return false
+                // relative.withDependencies?
+                if (nested.r && !depShallowCompare(nested.r, id, root, parent))
+                    return false
+
+                if (depCompare(getModuleDependencies(id)!, nested, root, id))
+                    continue
+
+                return false
+            }
+            default: {
+                if (depShallowCompare(compare as number, id, root, parent))
+                    continue
+                return false
+            }
+        }
     }
 
     return true
@@ -212,9 +255,9 @@ function depShallowCompare(
 }
 
 function depGetRelMagnitude(dep: number) {
-    const rootRelative = dep & RelativeSignBit
+    const sign = dep & RelativeSignBit
     dep = dep & RelativeBitMask
-    if (rootRelative) dep = -dep
+    if (sign) dep = -dep
     return dep
 }
 
@@ -224,16 +267,35 @@ function depGenFilterKey(deps: ComparableDependencyMap): string {
     for (let i = 0; i < deps.length; i++) {
         const dep = deps[i]
 
-        if (dep == null) key += ','
-        else if (typeof dep === 'object') {
-            if (dep.l) key += '#'
-            // relative.withDependencies?
-            if (dep.r) key += depGenRelativeKeyPart(dep.r)
+        if (dep == null) {
+            key += ','
+            continue
+        }
 
-            key += `[${depGenFilterKey(dep)}],`
-        } else {
-            if (dep & RelativeBit) key += depGenRelativeKeyPart(dep)
-            else key += `${dep},`
+        switch (typeof dep) {
+            case 'function': {
+                // It's a filter function
+                const filter = dep as any
+                key += `${filter.key},`
+                break
+            }
+            case 'object': {
+                // It's a nested dependency array
+                const nested = dep as ComparableDependencyMap
+                if (nested.l) key += '#'
+                // relative.withDependencies?
+                if (nested.r) key += `${depGenRelativeKeyPart(nested.r)}:`
+
+                key += `[${depGenFilterKey(nested)}],`
+                break
+            }
+            default: {
+                const numDep = dep as number
+                if (numDep & RelativeBit)
+                    key += `${depGenRelativeKeyPart(numDep)},`
+                else key += `${numDep},`
+                break
+            }
         }
     }
 
@@ -243,5 +305,5 @@ function depGenFilterKey(deps: ComparableDependencyMap): string {
 function depGenRelativeKeyPart(dep: number) {
     const magnitude = depGetRelMagnitude(dep)
     const prefix = dep & RelativeRootBit ? '~' : '^'
-    return `${prefix}${magnitude},`
+    return `${prefix}${magnitude}`
 }

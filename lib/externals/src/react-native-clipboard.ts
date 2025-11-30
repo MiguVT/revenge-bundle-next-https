@@ -35,9 +35,6 @@ let ClipboardModule: typeof import('@react-native-clipboard/clipboard') =
                         ),
                     ]),
                 ),
-                {
-                    uninitialized: true,
-                },
             )
 
             if (module) {

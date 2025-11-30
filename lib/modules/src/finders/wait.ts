@@ -1,5 +1,5 @@
 import { noop } from '@revenge-mod/utils/callback'
-import { getCachedFilterRegistry } from '../caches'
+import { getFilterMatches } from '../caches'
 import { mInitialized } from '../metro/patches'
 import {
     onAnyModuleInitialized,
@@ -11,6 +11,7 @@ import {
     FilterResultFlagToHumanReadable,
     runFilter,
 } from './_internal'
+import { FilterScopes } from './filters'
 import type { MaybeDefaultExportMatched, Metro } from '../types'
 import type {
     FilterResultFlag,
@@ -18,24 +19,12 @@ import type {
 } from './_internal'
 import type { Filter, FilterResult } from './filters'
 
-export interface BaseWaitForModulesOptions<All extends boolean = boolean> {
-    /**
-     * Whether to include all modules, including blacklisted ones.
-     *
-     * @default false
-     */
-    all?: All
-}
-
 export type WaitForModulesUnsubscribeFunction = () => void
 
 export type WaitForModulesCallback<T> = (exports: T, id: Metro.ModuleID) => any
 
-export type WaitForModulesOptions<
-    ReturnNamespace extends boolean = boolean,
-    All extends boolean = boolean,
-> = RunFilterReturnExportsOptions<ReturnNamespace> &
-    BaseWaitForModulesOptions<All> & {
+export type WaitForModulesOptions<ReturnNamespace extends boolean = boolean> =
+    RunFilterReturnExportsOptions<ReturnNamespace> & {
         /**
          * Use cached results **only** (if possible).
          * If there is no cache result, this works as if you did not pass this option at all.
@@ -81,9 +70,7 @@ export function waitForModules<F extends Filter>(
 ): WaitForModulesUnsubscribeFunction
 
 export function waitForModules<
-    F extends O extends WaitForModulesOptions<boolean, true>
-        ? Filter<any, false>
-        : Filter,
+    F extends Filter,
     O extends WaitForModulesOptions,
 >(
     filter: F,
@@ -97,13 +84,13 @@ export function waitForModules(
     options?: WaitForModulesOptions,
 ): WaitForModulesUnsubscribeFunction {
     if (options?.cached) {
-        const reg = getCachedFilterRegistry(filter.key)
+        const reg = getFilterMatches(filter.key)
         if (reg === null) return noop
 
         if (reg) {
             if (__BUILD_FLAG_DEBUG_MODULE_WAITS__)
                 nativeLoggingHook(
-                    `\u001b[32mUsing cached results for wait \u001b[33m${filter.key}\u001b[0m`,
+                    `\u001b[32mUsing cached results for wait: \u001b[33m${filter.key}\u001b[0m`,
                     1,
                 )
 
@@ -144,7 +131,7 @@ export function waitForModules(
         )
 
     return onAnyModuleInitialized(
-        options?.all
+        filter.scopes & FilterScopes.All
             ? (id, exports) => {
                   const flag = runFilter(filter, id, exports, options)
                   if (flag) {
@@ -187,7 +174,6 @@ export function waitForModules(
  *
  * @param path The path to wait for.
  * @param callback The callback to call once the module is initialized.
- * @param options The options to use for the wait.
  * @returns A function to unsubscribe.
  *
  * @example
@@ -203,14 +189,13 @@ export function waitForModules(
 export function waitForModuleWithImportedPath<T = any>(
     path: string,
     callback: WaitForModulesCallback<T>,
-    options?: BaseWaitForModulesOptions,
 ): WaitForModulesUnsubscribeFunction {
     const unsub = onModuleFinishedImporting((id, cmpPath) => {
         if (path === cmpPath) {
             unsub()
             // Module is not fully initialized yet, so we need to wait for it
             onModuleInitialized(id, (id, exports) => {
-                if (!options?.all || mInitialized.has(id)) callback(exports, id)
+                callback(exports, id)
             })
         }
     })

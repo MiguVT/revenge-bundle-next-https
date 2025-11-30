@@ -1,3 +1,4 @@
+import defer * as Components from '@revenge-mod/components'
 import { InternalPluginFlags, registerPlugin } from '@revenge-mod/plugins/_'
 import { PluginFlags } from '@revenge-mod/plugins/constants'
 import { defineLazyProperties } from '@revenge-mod/utils/object'
@@ -14,7 +15,7 @@ registerPlugin(
         init({ unscoped }) {
             defineLazyProperties(unscoped, {
                 components: () => {
-                    return require('@revenge-mod/components')
+                    return Components
                 },
             })
         },
@@ -23,5 +24,5 @@ registerPlugin(
     // biome-ignore format: Don't format this
     InternalPluginFlags.Internal |
     InternalPluginFlags.Essential |
-    InternalPluginFlags.ImplicitDependency,
+    InternalPluginFlags.API,
 )

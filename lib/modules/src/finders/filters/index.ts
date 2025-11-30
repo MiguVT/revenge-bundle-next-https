@@ -1,9 +1,15 @@
-import { FilterFlag } from './constants'
+import { FilterFlag, FilterScopes } from './constants'
 import { createFilterGenerator } from './utils'
 import type { Filter, FilterGenerator } from './utils'
 
 export * from './constants'
 export * from './utils'
+
+type FilterRequiringExports<T> = Filter<{
+    Result: T
+    RequiresExports: true
+    Scopes: [typeof FilterScopes.Initialized]
+}>
 
 /**
  * Filter modules by their exports having all of the specified properties.
@@ -33,13 +39,14 @@ export const withProps = createFilterGenerator<Parameters<WithProps>>(
     },
     props => `revenge.props(${props.join(',')})`,
     FilterFlag.RequiresExports,
+    FilterScopes.Initialized,
 ) as WithProps
 
 export type WithProps = FilterGenerator<
     <T extends Record<string, any> = Record<string, any>>(
         prop: keyof T,
         ...props: Array<keyof T>
-    ) => Filter<T, true>
+    ) => FilterRequiringExports<T>
 >
 
 /**
@@ -58,13 +65,14 @@ export const withoutProps = createFilterGenerator<Parameters<WithoutProps>>(
     },
     props => `revenge.withoutProps(${props.join(',')})`,
     FilterFlag.RequiresExports,
+    FilterScopes.Initialized,
 ) as WithoutProps
 
 export type WithoutProps = FilterGenerator<
     <T extends Record<string, any>>(
         prop: string,
         ...props: string[]
-    ) => Filter<T, true>
+    ) => FilterRequiringExports<T>
 >
 
 /**
@@ -87,10 +95,11 @@ export const withSingleProp = createFilterGenerator<Parameters<WithSingleProp>>(
     },
     ([prop]) => `revenge.singleProp(${prop})`,
     FilterFlag.RequiresExports,
+    FilterScopes.Initialized,
 ) as WithSingleProp
 
 export type WithSingleProp = FilterGenerator<
-    <T extends Record<string, any>>(prop: keyof T) => Filter<T, true>
+    <T extends Record<string, any>>(prop: keyof T) => FilterRequiringExports<T>
 >
 
 /**
@@ -127,10 +136,11 @@ export const withName = createFilterGenerator<Parameters<WithName>>(
     ([name], _, exports) => exports.name === name,
     ([name]) => `revenge.name(${name})`,
     FilterFlag.RequiresExports,
+    FilterScopes.Initialized,
 ) as WithName
 
 export type WithName = FilterGenerator<
-    <T extends object = object>(name: string) => Filter<T, true>
+    <T extends object = object>(name: string) => FilterRequiringExports<T>
 >
 
 export * from './composite'

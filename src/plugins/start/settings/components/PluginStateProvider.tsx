@@ -9,6 +9,7 @@ export interface PluginEnabledStates {
 
 const PluginStatesContext = createContext<{
     enabled: PluginEnabledStates
+    status: { [pluginId: string]: number }
 } | null>(null)
 
 export default function PluginStatesProvider({
@@ -24,7 +25,22 @@ export default function PluginStatesProvider({
         return states
     })
 
+    const [status, setStatus] = useState<{ [pluginId: string]: number }>(() => {
+        const statuses: { [pluginId: string]: number } = {}
+        for (const plugin of pList.values()) {
+            statuses[plugin.manifest.id] = plugin.status
+        }
+        return statuses
+    })
+
     useEffect(() => {
+        const handleStatusChange = (plugin: AnyPlugin) => {
+            setStatus(prev => ({
+                ...prev,
+                [plugin.manifest.id]: plugin.status,
+            }))
+        }
+
         const handleEnabled = (plugin: AnyPlugin) => {
             setEnabled(prev => ({
                 ...prev,
@@ -39,6 +55,11 @@ export default function PluginStatesProvider({
             }))
         }
 
+        pEmitter.on('preInited', handleStatusChange)
+        pEmitter.on('inited', handleStatusChange)
+        pEmitter.on('started', handleStatusChange)
+        pEmitter.on('stopped', handleStatusChange)
+
         pEmitter.on('enabled', handleEnabled)
         pEmitter.on('disabled', handleDisabled)
 
@@ -50,9 +71,10 @@ export default function PluginStatesProvider({
 
     const contextValue = useMemo(
         () => ({
-            enabled: enabled,
+            enabled,
+            status,
         }),
-        [enabled],
+        [enabled, status],
     )
 
     return (
@@ -71,4 +93,15 @@ export function usePluginEnabled(plugin: AnyPlugin) {
     }
 
     return context.enabled[plugin.manifest.id]
+}
+
+export function usePluginStatus(plugin: AnyPlugin) {
+    const context = useContext(PluginStatesContext)
+
+    if (!context) {
+        console.warn('usePluginStatus not used within a PluginStateProvider')
+        return plugin.status
+    }
+
+    return context.status[plugin.manifest.id]
 }

@@ -1,21 +1,32 @@
 import {
     onSettingsModulesLoaded,
+    refreshSettingsNavigator,
     refreshSettingsOverviewScreen,
 } from '@revenge-mod/discord/modules/settings'
 import { InternalPluginFlags, registerPlugin } from '@revenge-mod/plugins/_'
 import { PluginFlags } from '@revenge-mod/plugins/constants'
 import pluginSettings from '../settings'
+import * as dt from './devtools'
+import defer * as rdt from './react-devtools'
+import defer * as utils from './utils'
 import type { PluginApi } from '@revenge-mod/plugins/types'
 
 interface Storage {
-    devtools: {
-        address: string
-        autoConnect: boolean
-    }
+    devTools: DevToolsSettings
+    reactDevTools: DevToolsSettings
+}
+
+interface DevToolsSettings {
+    address: string
+    autoConnect: boolean
 }
 
 const defaultStorage: Storage = {
-    devtools: {
+    devTools: {
+        address: 'localhost:7864',
+        autoConnect: false,
+    },
+    reactDevTools: {
         address: 'localhost:8097',
         autoConnect: false,
     },
@@ -36,24 +47,26 @@ registerPlugin<{ storage: Storage }>(
             load: true,
             default: defaultStorage,
         },
-        start(api_) {
+        async start(api_) {
             api = api_
 
-            onSettingsModulesLoaded(() => {
-                require('./utils').register()
-            })
+            onSettingsModulesLoaded(utils.register)
 
-            if (api_.plugin.flags & PluginFlags.EnabledLate)
+            if (api_.plugin.flags & PluginFlags.EnabledLate) {
                 refreshSettingsOverviewScreen()
+                refreshSettingsNavigator()
+            }
 
-            Promise.all([import('./react-devtools'), api.storage.get()]).then(
-                ([rdt, settings]) => {
-                    if (settings.devtools.autoConnect) rdt.connect()
-                },
-            )
+            const settings = await api.storage.get()
+
+            dt.DTContext.addr = settings.devTools.address
+            rdt.RDTContext.addr = settings.reactDevTools.address
+
+            if (settings.devTools.autoConnect) dt.connect()
+            if (settings.reactDevTools.autoConnect) rdt.connect()
         },
         stop({ cleanup }) {
-            cleanup(refreshSettingsOverviewScreen)
+            cleanup(refreshSettingsOverviewScreen, refreshSettingsNavigator)
         },
     },
     PluginFlags.Enabled,

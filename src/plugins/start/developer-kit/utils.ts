@@ -5,11 +5,13 @@ import {
 import { api } from '.'
 import { Setting } from './constants'
 import AssetBrowserSetting from './definitions/AssetBrowserSetting'
+import DTAutoConnectSetting from './definitions/DTAutoConnectSetting'
+import DTConnectSetting from './definitions/DTConnectSetting'
+import DTDisconnectSetting from './definitions/DTDisconnectSetting'
 import EvalJSSetting from './definitions/EvalJSSetting'
 import RDTAutoConnectSetting from './definitions/RDTAutoConnectSetting'
 import RDTConnectSetting from './definitions/RDTConnectSetting'
 import RDTDisconnectSetting from './definitions/RDTDisconnectSetting'
-import RDTVersionSetting from './definitions/RDTVersionSetting'
 import RevengeDeveloperSetting from './definitions/RevengeDeveloperSetting'
 import TestErrorBoundarySetting from './definitions/TestErrorBoundarySetting'
 
@@ -17,7 +19,9 @@ export function register() {
     api.cleanup(
         registerSettingsItems({
             [Setting.RevengeDeveloper]: RevengeDeveloperSetting,
-            [Setting.RDTVersion]: RDTVersionSetting,
+            [Setting.DTAutoConnect]: DTAutoConnectSetting,
+            [Setting.DTConnect]: DTConnectSetting,
+            [Setting.DTDisconnect]: DTDisconnectSetting,
             [Setting.RDTAutoConnect]: RDTAutoConnectSetting,
             [Setting.RDTConnect]: RDTConnectSetting,
             [Setting.RDTDisconnect]: RDTDisconnectSetting,
